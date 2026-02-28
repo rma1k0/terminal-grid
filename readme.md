@@ -10,6 +10,8 @@
 
 ![Terminal Grid Screenshot](images/screenshot.png)
 
+![Terminal Grid Demo](animation.gif)
+
 ## Features
 
 - **Grid Layout** — Open up to 4x5 (20) terminals arranged in a customizable grid
