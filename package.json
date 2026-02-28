@@ -1,0 +1,170 @@
+{
+  "name": "terminal-grid",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "version": "0.3.1",
+  "publisher": "koenma",
+  "author": "koenma",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/koenma-studio/terminal-grid"
+  },
+  "homepage": "https://github.com/koenma-studio/terminal-grid",
+  "bugs": {
+    "url": "https://github.com/koenma-studio/terminal-grid/issues"
+  },
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "terminal",
+    "grid",
+    "xterm",
+    "mcp",
+    "multiplexer",
+    "multi-terminal",
+    "split-terminal"
+  ],
+  "icon": "images/icon.png",
+  "galleryBanner": {
+    "color": "#1a1a2e",
+    "theme": "dark"
+  },
+  "activationEvents": [],
+  "extensionKind": [
+    "workspace"
+  ],
+  "l10n": "./l10n",
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "terminal-grid-container",
+          "title": "%viewContainer.title%",
+          "icon": "images/sidebar.svg"
+        }
+      ]
+    },
+    "views": {
+      "terminal-grid-container": [
+        {
+          "type": "webview",
+          "id": "terminalGrid.sidebarView",
+          "name": "%view.name%"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "terminalGrid.openGrid",
+        "title": "%command.openGrid%"
+      },
+      {
+        "command": "terminalGrid.openCustomGrid",
+        "title": "%command.openCustomGrid%"
+      },
+      {
+        "command": "terminalGrid.open2x2",
+        "title": "%command.open2x2%"
+      },
+      {
+        "command": "terminalGrid.open2x3",
+        "title": "%command.open2x3%"
+      },
+      {
+        "command": "terminalGrid.open3x3",
+        "title": "%command.open3x3%"
+      },
+      {
+        "command": "terminalGrid.sendToCell",
+        "title": "%command.sendToCell%"
+      },
+      {
+        "command": "terminalGrid.readCell",
+        "title": "%command.readCell%"
+      },
+      {
+        "command": "terminalGrid.getGridInfo",
+        "title": "%command.getGridInfo%"
+      },
+      {
+        "command": "terminalGrid.testAPI",
+        "title": "%command.testAPI%"
+      },
+      {
+        "command": "terminalGrid.copyMcpConfig",
+        "title": "%command.copyMcpConfig%"
+      }
+    ],
+    "configuration": {
+      "title": "%config.title%",
+      "properties": {
+        "terminalGrid.defaultRows": {
+          "type": "number",
+          "default": 2,
+          "minimum": 1,
+          "maximum": 4,
+          "description": "%config.defaultRows%"
+        },
+        "terminalGrid.defaultCols": {
+          "type": "number",
+          "default": 3,
+          "minimum": 1,
+          "maximum": 5,
+          "description": "%config.defaultCols%"
+        },
+        "terminalGrid.zoomPercent": {
+          "type": "number",
+          "default": 100,
+          "minimum": 50,
+          "maximum": 300,
+          "description": "%config.zoomPercent%"
+        },
+        "terminalGrid.fontFamily": {
+          "type": "string",
+          "default": "",
+          "description": "%config.fontFamily%"
+        },
+        "terminalGrid.backgroundColor": {
+          "type": "string",
+          "default": "",
+          "description": "%config.backgroundColor%"
+        },
+        "terminalGrid.foregroundColor": {
+          "type": "string",
+          "default": "",
+          "description": "%config.foregroundColor%"
+        },
+        "terminalGrid.apiPort": {
+          "type": "number",
+          "default": 7890,
+          "minimum": 0,
+          "maximum": 65535,
+          "description": "%config.apiPort%"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./ && node scripts/build.js",
+    "compile:ext": "tsc -p ./",
+    "compile:webview": "node scripts/build.js",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.2",
+    "@types/vscode": "^1.80.0",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "esbuild": "^0.27.3",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "node-pty": "^1.1.0"
+  }
+}

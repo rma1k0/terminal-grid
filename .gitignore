@@ -1,0 +1,12 @@
+out/
+node_modules/
+*.vsix
+.env*
+.DS_Store
+Thumbs.db
+*.log
+1.png
+test-api.js
+logo.*
+logo-1024.png
+*.ttf
