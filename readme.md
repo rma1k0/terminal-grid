@@ -3,29 +3,51 @@
 [English](./README.md) | [한국어](./docs/README.ko.md) | [中文](./docs/README.zh-CN.md) | [日本語](./docs/README.ja.md) | [Português (Brasil)](./docs/README.pt-BR.md) | [Español](./docs/README.es.md) | [Français](./docs/README.fr.md) | [Deutsch](./docs/README.de.md)
 
 <p align="center">
-  <img src="images/icon.png" width="128" alt="Terminal Grid">
+  <img src="https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/icon.png" width="128" alt="Terminal Grid">
 </p>
 
-> Multiple terminals in a single editor tab — powered by xterm.js + node-pty
+> Multiple terminals in a single editor tab — tmux-like panes powered by xterm.js + node-pty
 
-![Terminal Grid Screenshot](images/screenshot.png)
-
-![Terminal Grid Demo](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/animation.gif)
+![Terminal Grid Screenshot](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/screenshot.png)
 
 ## Features
 
-- **Grid Layout** — Open up to 4x5 (20) terminals arranged in a customizable grid
-- **Sidebar Control Panel** — Manage grid size, presets, broadcast, zoom, fonts, and colors
-- **Broadcast Input** — Send commands to all terminals or selected cells at once
-- **Per-Cell Customization** — Individual background color, foreground color, and font per cell
-- **Presets** — Save and load grid configurations with startup commands, labels, and styles
-- **Startup Commands** — Auto-run commands when terminals spawn
-- **Cell Labels** — Name each terminal cell for easy identification
-- **Context Menu** — Right-click to paste, clear, restart, kill, or rename cells
-- **MCP Server** — Built-in HTTP bridge for LLM orchestration (Claude Code, etc.)
-- **Agent API** — Programmatic control via VS Code commands (`sendToCell`, `readCell`, `getGridInfo`)
-- **Remote-SSH Compatible** — Works with VS Code Remote-SSH out of the box
-- **Collapsible Sections** — Sidebar sections collapse to save space, state persisted
+### Grid Layout
+
+Open up to 4x5 (20) terminals arranged in a customizable grid. Drag cell borders to resize — just like Excel.
+
+![Grid Layout](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-grid-open.gif)
+
+### Startup Commands & Presets
+
+Auto-run commands when terminals spawn. Save entire grid configurations as presets — per-project auto-load supported.
+
+![Startup Commands](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-startup-commands.gif)
+
+### Per-Cell Customization
+
+Individual background color, foreground color, and font per cell. Apply to all cells at once or customize each one.
+
+![Cell Customization](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-cell-customize.gif)
+
+### Broadcast Input
+
+Send commands to all terminals or selected cells at once. Supports CSI u (Kitty keyboard protocol) for LLM CLI tools like Claude Code and Codex.
+
+![Broadcast](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-broadcast.gif)
+
+### MCP Server & Agent API
+
+Built-in HTTP bridge for LLM orchestration. Control terminals programmatically from Claude Code, Codex, or any MCP client.
+
+### And More
+
+- **Cell Labels** — Name each terminal for easy identification
+- **Context Menu** — Right-click to paste, clear, restart, kill, or rename
+- **Themes** — 8 built-in color themes
+- **Custom Fonts** — Load .ttf/.otf/.woff/.woff2 files
+- **Remote-SSH Compatible** — Works out of the box
+- **Collapsible Sidebar** — All sections collapse, state persisted
 
 ## Quick Start
 
@@ -55,18 +77,6 @@
 | `terminalGrid.backgroundColor` | `""` | Background color override (empty = IDE theme) |
 | `terminalGrid.foregroundColor` | `""` | Foreground color override (empty = IDE theme) |
 | `terminalGrid.apiPort` | `7890` | MCP HTTP bridge port (0 = disabled) |
-
-## Sidebar Panel
-
-The sidebar provides a full control panel:
-
-- **Grid Controls** — Set rows/columns and open grid
-- **Presets** — Save/load/delete grid configurations with per-project auto-load
-- **Startup Commands** — Define commands to auto-run in each cell on grid creation
-- **Cell Labels** — Assign aliases to terminal cells
-- **Broadcast Input** — Send commands to all or selected cells
-- **Terminal Settings** — Zoom, font family, colors with per-cell override tabs
-- **Custom Fonts** — Load .ttf/.otf/.woff/.woff2 font files
 
 ## MCP Integration
 
