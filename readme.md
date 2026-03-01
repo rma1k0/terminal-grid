@@ -10,7 +10,7 @@
 
 ![Terminal Grid Screenshot](images/screenshot.png)
 
-![Terminal Grid Demo](animation.gif)
+![Terminal Grid Demo](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/animation.gif)
 
 ## Features
 

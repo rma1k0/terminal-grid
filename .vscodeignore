@@ -3,11 +3,11 @@ src/**
 scripts/**
 out/**
 docs/**
-*.png
 *.ts
 !dist/**
 !media/**
 !images/**
+animation.gif
 node_modules/**
 .gitignore
 tsconfig.json
