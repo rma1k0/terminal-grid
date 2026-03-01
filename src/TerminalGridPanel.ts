@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
+import { BUILTIN_THEMES, resolveThemeColors } from "./themes";
 
 interface PtyLike {
   onData(cb: (data: string) => void): void;
@@ -33,7 +34,10 @@ export class TerminalGridPanel {
   private readonly _context: vscode.ExtensionContext;
   private _terminals: TerminalInstance[] = [];
   private _outputBuffers: string[] = [];
+  private _csiUMode: boolean[] = [];            // Kitty keyboard protocol active per cell
   private static readonly OUTPUT_BUFFER_SIZE = 50000;
+  private static readonly CSI_U_ENABLE = /\x1b\[>[0-9]+u/;
+  private static readonly CSI_U_DISABLE = /\x1b\[<[0-9]*u/;
   private _disposed = false;
   private _rows: number;
   private _cols: number;
@@ -99,10 +103,19 @@ export class TerminalGridPanel {
     context.globalState.update("lastGrid", { rows, cols });
   }
 
+  /** Get the correct Enter sequence for a terminal cell */
+  private _enterSeq(id: number): string {
+    return this._csiUMode[id] ? "\x1b[13u" : "\r";
+  }
+
   /** Broadcast text to all terminals */
   public broadcastInput(text: string): void {
+    const hasNewline = /\r?\n/.test(text);
+    const data = hasNewline
+      ? "\x1b[200~" + text + "\x1b[201~"
+      : text;
     for (const t of this._terminals) {
-      t.pty.write(text + "\r");
+      t.pty.write(data + this._enterSeq(t.id));
     }
   }
 
@@ -111,6 +124,18 @@ export class TerminalGridPanel {
     const t = this._terminals[cellId];
     if (!t) return false;
     t.pty.write(text);
+    return true;
+  }
+
+  /** Send text + Enter to a specific terminal cell (auto-detects CSI u mode) */
+  public sendInputToCell(cellId: number, text: string): boolean {
+    const t = this._terminals[cellId];
+    if (!t) return false;
+    const hasNewline = /\r?\n/.test(text);
+    const data = hasNewline
+      ? "\x1b[200~" + text + "\x1b[201~"
+      : text;
+    t.pty.write(data + this._enterSeq(cellId));
     return true;
   }
 
@@ -147,8 +172,8 @@ export class TerminalGridPanel {
   }
 
   /** Send per-cell config to webview */
-  public sendCellConfig(cellId: number, bgColor: string, fgColor: string, fontFamily: string): void {
-    this._panel.webview.postMessage({ type: "cellConfig", id: cellId, bgColor, fgColor, fontFamily });
+  public sendCellConfig(cellId: number, bgColor: string, fgColor: string, fontFamily: string, themeName?: string, themeColors?: Record<string, string> | null): void {
+    this._panel.webview.postMessage({ type: "cellConfig", id: cellId, bgColor, fgColor, fontFamily, themeName: themeName ?? "", themeColors: themeColors ?? null });
   }
 
   /** Clear all per-cell overrides in webview */
@@ -209,10 +234,11 @@ export class TerminalGridPanel {
             this._context.globalState.get<CustomFont[]>("customFonts", [])
           );
           // Apply stored per-cell overrides
-          const cellOverrides = this._context.globalState.get<Record<number, {bgColor?: string; fgColor?: string; fontFamily?: string}>>("cellOverrides", {});
+          const cellOverrides = this._context.globalState.get<Record<number, {bgColor?: string; fgColor?: string; fontFamily?: string; themeName?: string}>>("cellOverrides", {});
           for (const [id, ov] of Object.entries(cellOverrides)) {
-            if (ov.bgColor || ov.fgColor || ov.fontFamily) {
-              this.sendCellConfig(parseInt(id), ov.bgColor || "", ov.fgColor || "", ov.fontFamily || "");
+            if (ov.bgColor || ov.fgColor || ov.fontFamily || ov.themeName) {
+              const tc = ov.themeName ? resolveThemeColors(ov.themeName) : null;
+              this.sendCellConfig(parseInt(id), ov.bgColor || "", ov.fgColor || "", ov.fontFamily || "", ov.themeName || "", tc);
             }
           }
           break;
@@ -262,12 +288,15 @@ export class TerminalGridPanel {
     this._configListener = vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration("terminalGrid")) {
         const cfg = vscode.workspace.getConfiguration("terminalGrid");
+        const themeName = cfg.get<string>("colorTheme", "");
         this._panel.webview.postMessage({
           type: "configUpdate",
           zoom: cfg.get<number>("zoomPercent", 100),
           fontFamily: cfg.get<string>("fontFamily", ""),
           bgColor: cfg.get<string>("backgroundColor", ""),
           fgColor: cfg.get<string>("foregroundColor", ""),
+          themeName,
+          themeColors: resolveThemeColors(themeName),
         });
       }
     });
@@ -368,9 +397,13 @@ export class TerminalGridPanel {
       const pty = this._spawnPty(nodePty, c, r, cwd);
       const id = i;
       this._outputBuffers[id] = "";
+      this._csiUMode[id] = false;
       let startupSent = false;
       pty.onData((data: string) => {
         if (!this._disposed) {
+          // Track Kitty keyboard protocol mode
+          if (TerminalGridPanel.CSI_U_ENABLE.test(data)) this._csiUMode[id] = true;
+          if (TerminalGridPanel.CSI_U_DISABLE.test(data)) this._csiUMode[id] = false;
           this._outputBuffers[id] = (this._outputBuffers[id] || "") + data;
           if (this._outputBuffers[id].length > TerminalGridPanel.OUTPUT_BUFFER_SIZE) {
             this._outputBuffers[id] = this._outputBuffers[id].slice(-TerminalGridPanel.OUTPUT_BUFFER_SIZE);
@@ -423,9 +456,13 @@ export class TerminalGridPanel {
     const pendingCmd = expanded[id] || "";
     let startupSent = false;
     this._outputBuffers[id] = "";
+    this._csiUMode[id] = false;
 
     pty.onData((data: string) => {
       if (!this._disposed) {
+        // Track Kitty keyboard protocol mode
+        if (TerminalGridPanel.CSI_U_ENABLE.test(data)) this._csiUMode[id] = true;
+        if (TerminalGridPanel.CSI_U_DISABLE.test(data)) this._csiUMode[id] = false;
         this._outputBuffers[id] = (this._outputBuffers[id] || "") + data;
         if (this._outputBuffers[id].length > TerminalGridPanel.OUTPUT_BUFFER_SIZE) {
           this._outputBuffers[id] = this._outputBuffers[id].slice(-TerminalGridPanel.OUTPUT_BUFFER_SIZE);
@@ -508,6 +545,7 @@ export class TerminalGridPanel {
       width: 100%; height: 100%;
       gap: 2px;
       padding: 2px;
+      position: relative;
     }
     .cell {
       overflow: hidden;
@@ -543,6 +581,25 @@ export class TerminalGridPanel {
       color: var(--vscode-textLink-foreground, #3794ff);
       opacity: 0.7;
     }
+    .grid-resizer {
+      position: absolute;
+      z-index: 20;
+      background: transparent;
+    }
+    .grid-resizer:hover, .grid-resizer.active {
+      background: var(--vscode-focusBorder, #007fd4);
+      opacity: 0.45;
+    }
+    .grid-resizer.col-resizer {
+      top: 0; width: 6px; height: 100%;
+      cursor: col-resize;
+    }
+    .grid-resizer.row-resizer {
+      left: 0; height: 6px; width: 100%;
+      cursor: row-resize;
+    }
+    body.resizing-col, body.resizing-col * { cursor: col-resize !important; }
+    body.resizing-row, body.resizing-row * { cursor: row-resize !important; }
     .term-container {
       flex: 1;
       overflow: hidden;
@@ -602,6 +659,8 @@ export class TerminalGridPanel {
     var __GRID_FONT_FAMILY = ${JSON.stringify(vscode.workspace.getConfiguration("terminalGrid").get<string>("fontFamily", ""))};
     var __GRID_BG_COLOR = ${JSON.stringify(vscode.workspace.getConfiguration("terminalGrid").get<string>("backgroundColor", ""))};
     var __GRID_FG_COLOR = ${JSON.stringify(vscode.workspace.getConfiguration("terminalGrid").get<string>("foregroundColor", ""))};
+    var __GRID_THEME = ${JSON.stringify(vscode.workspace.getConfiguration("terminalGrid").get<string>("colorTheme", ""))};
+    var __GRID_THEME_COLORS = ${JSON.stringify(resolveThemeColors(vscode.workspace.getConfiguration("terminalGrid").get<string>("colorTheme", "")))};
   </script>
   <script nonce="${nonce}" src="${gridTerminalJs}"></script>
 </body>

@@ -54,7 +54,7 @@
   "No projects registered": "Aucun projet enregistré",
   "Linked: {0}": "Lié : {0}",
   "Grid opens as an editor tab.\nCtrl+Wheel to zoom individual cells.": "La grille s'ouvre comme onglet d'éditeur.\nCtrl+Molette pour zoomer les cellules individuelles.",
-  "Register projects and click to switch folders. If a preset is linked, it will be auto-applied on switch.": "Enregistrez des projets et cliquez pour changer de dossier. Si un préréglage est lié, il sera appliqué automatiquement.",
+  "Register projects and click to switch folders. Ctrl+Click to open in a new window. If a preset is linked, it will be auto-applied on switch.": "Enregistrez des projets et cliquez pour changer de dossier. Ctrl+Clic pour ouvrir dans une nouvelle fenêtre. Si un préréglage est lié, il sera appliqué automatiquement.",
   "Hover to select the desired rows×cols size. Supports up to 4×5 (20 cells). Grid opens as an editor tab, each cell is an independent terminal.": "Survolez pour sélectionner la taille lignes×colonnes. Jusqu'à 4×5 (20 cellules). La grille s'ouvre comme onglet d'éditeur, chaque cellule est un terminal indépendant.",
   "Zoom: Global font size (50–300%). Font/Color: Use tabs for global or per-cell settings. Changes in All tab apply to all cells. Set global first, then customize individual cells. Individual cells can be zoomed separately with Ctrl+Wheel.": "Zoom : Taille globale de police (50–300%). Font/Color : Utilisez les onglets pour les paramètres globaux ou par cellule. Les modifications dans All s'appliquent à toutes les cellules. Configurez le global d'abord, puis personnalisez. Ctrl+Molette pour le zoom individuel.",
   "Commands are auto-executed in each cell when the grid opens. Use ×N to repeat the same command for N cells. Extra cells beyond the command list open as default terminals.": "Les commandes sont exécutées automatiquement dans chaque cellule à l'ouverture. Utilisez ×N pour répéter la même commande sur N cellules. Les cellules supplémentaires s'ouvrent comme terminaux par défaut.",
@@ -71,5 +71,6 @@
   "node-pty installed successfully\\!": "node-pty installé avec succès \\!",
   "Reload the window to activate.": "Rechargez la fenêtre pour activer.",
   "node-pty installed successfully!": "node-pty installé avec succès !",
-  "Copy": "Copier"
+  "Copy": "Copier",
+  "Theme": "Thème"
 }

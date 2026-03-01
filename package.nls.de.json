@@ -20,5 +20,6 @@
   "config.fontFamily": "Terminal-Schriftart (leer = IDE-Design)",
   "config.backgroundColor": "Terminal-Hintergrundfarbe (leer = IDE-Design)",
   "config.foregroundColor": "Terminal-Textfarbe (leer = IDE-Design)",
+  "config.colorTheme": "Terminal-Farbschema (leer = IDE-Design)",
   "config.apiPort": "HTTP-Port für MCP-Brücke (0 = deaktiviert). Neustart erforderlich."
 }

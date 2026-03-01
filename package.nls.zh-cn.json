@@ -20,5 +20,6 @@
   "config.fontFamily": "终端字体覆盖（空 = 跟随 IDE 主题）",
   "config.backgroundColor": "终端背景色覆盖（空 = 跟随 IDE 主题）",
   "config.foregroundColor": "终端前景色覆盖（空 = 跟随 IDE 主题）",
+  "config.colorTheme": "终端颜色主题（空 = 跟随 IDE 主题）",
   "config.apiPort": "MCP 桥接 HTTP 端口（0 = 禁用）。需要重启。"
 }

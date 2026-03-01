@@ -1,6 +1,6 @@
 {
   "displayName": "Terminal Grid",
-  "description": "Terminal grid in a single editor tab powered by xterm.js + node-pty",
+  "description": "Split terminals into a grid layout in a single editor tab — tmux-like panes powered by xterm.js + node-pty",
   "viewContainer.title": "Terminal Grid",
   "view.name": "Terminal Grid",
   "command.openGrid": "Terminal Grid: Open Grid",
@@ -20,5 +20,6 @@
   "config.fontFamily": "Terminal font family override (empty = follow IDE theme)",
   "config.backgroundColor": "Terminal background color override (empty = follow IDE theme)",
   "config.foregroundColor": "Terminal foreground color override (empty = follow IDE theme)",
+  "config.colorTheme": "Terminal color theme (empty = follow IDE theme)",
   "config.apiPort": "HTTP API port for MCP bridge (0 = disabled). Restart required."
 }

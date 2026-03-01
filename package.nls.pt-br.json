@@ -20,5 +20,6 @@
   "config.fontFamily": "Fonte do terminal (vazio = tema do IDE)",
   "config.backgroundColor": "Cor de fundo do terminal (vazio = tema do IDE)",
   "config.foregroundColor": "Cor do texto do terminal (vazio = tema do IDE)",
+  "config.colorTheme": "Tema de cores do terminal (vazio = tema do IDE)",
   "config.apiPort": "Porta HTTP da ponte MCP (0 = desativado). Reinício necessário."
 }

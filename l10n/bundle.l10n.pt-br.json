@@ -54,7 +54,7 @@
   "No projects registered": "Nenhum projeto registrado",
   "Linked: {0}": "Vinculado: {0}",
   "Grid opens as an editor tab.\nCtrl+Wheel to zoom individual cells.": "A grade abre como uma aba do editor.\nCtrl+Roda para zoom em células individuais.",
-  "Register projects and click to switch folders. If a preset is linked, it will be auto-applied on switch.": "Registre projetos e clique para trocar de pasta. Se uma predefinição estiver vinculada, será aplicada automaticamente.",
+  "Register projects and click to switch folders. Ctrl+Click to open in a new window. If a preset is linked, it will be auto-applied on switch.": "Registre projetos e clique para trocar de pasta. Ctrl+Clique para abrir em uma nova janela. Se uma predefinição estiver vinculada, será aplicada automaticamente.",
   "Hover to select the desired rows×cols size. Supports up to 4×5 (20 cells). Grid opens as an editor tab, each cell is an independent terminal.": "Passe o mouse para selecionar o tamanho linhas×colunas. Suporta até 4×5 (20 células). A grade abre como aba do editor, cada célula é um terminal independente.",
   "Zoom: Global font size (50–300%). Font/Color: Use tabs for global or per-cell settings. Changes in All tab apply to all cells. Set global first, then customize individual cells. Individual cells can be zoomed separately with Ctrl+Wheel.": "Zoom: Tamanho global da fonte (50–300%). Font/Color: Use abas para configurações globais ou por célula. Alterações na aba All aplicam-se a todas as células. Configure o global primeiro, depois personalize células individuais. Ctrl+Roda para zoom individual.",
   "Commands are auto-executed in each cell when the grid opens. Use ×N to repeat the same command for N cells. Extra cells beyond the command list open as default terminals.": "Comandos são executados automaticamente em cada célula ao abrir a grade. Use ×N para repetir o mesmo comando em N células. Células extras abrem como terminais padrão.",
@@ -71,5 +71,6 @@
   "node-pty installed successfully\\!": "node-pty instalado com sucesso\\!",
   "Reload the window to activate.": "Recarregue a janela para ativar.",
   "node-pty installed successfully!": "node-pty instalado com sucesso!",
-  "Copy": "Copiar"
+  "Copy": "Copiar",
+  "Theme": "Tema"
 }

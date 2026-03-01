@@ -13,6 +13,8 @@ declare const __GRID_ZOOM: number;
 declare const __GRID_FONT_FAMILY: string;
 declare const __GRID_BG_COLOR: string;
 declare const __GRID_FG_COLOR: string;
+declare const __GRID_THEME: string;
+declare const __GRID_THEME_COLORS: Record<string, string> | null;
 
 const vscode = acquireVsCodeApi();
 const rows = __GRID_ROWS;
@@ -23,6 +25,8 @@ let globalZoom = __GRID_ZOOM;
 let fontFamilyOverride = __GRID_FONT_FAMILY;
 let bgColorOverride = __GRID_BG_COLOR;
 let fgColorOverride = __GRID_FG_COLOR;
+let globalThemeName = __GRID_THEME;
+let globalThemeColors = __GRID_THEME_COLORS;
 
 const ZOOM_STEP = 10;
 const ZOOM_MIN = 50;
@@ -33,7 +37,28 @@ function css(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
-function buildTheme(): ITheme {
+function buildThemeFromColors(tc: Record<string, string> | null): ITheme {
+  if (tc) {
+    // Theme colors provided — use them, but allow bg/fg overrides on top
+    const bg = bgColorOverride || tc.background || "";
+    const fg = fgColorOverride || tc.foreground || "";
+    return {
+      background: bg || undefined,
+      foreground: fg || undefined,
+      cursor: tc.cursor || fg || undefined,
+      cursorAccent: tc.cursorAccent || bg || undefined,
+      selectionBackground: tc.selectionBackground || undefined,
+      black: tc.black || undefined, brightBlack: tc.brightBlack || undefined,
+      red: tc.red || undefined, brightRed: tc.brightRed || undefined,
+      green: tc.green || undefined, brightGreen: tc.brightGreen || undefined,
+      yellow: tc.yellow || undefined, brightYellow: tc.brightYellow || undefined,
+      blue: tc.blue || undefined, brightBlue: tc.brightBlue || undefined,
+      magenta: tc.magenta || undefined, brightMagenta: tc.brightMagenta || undefined,
+      cyan: tc.cyan || undefined, brightCyan: tc.brightCyan || undefined,
+      white: tc.white || undefined, brightWhite: tc.brightWhite || undefined,
+    };
+  }
+  // IDE Default — read CSS variables
   const bg = bgColorOverride || css("--vscode-terminal-background") || css("--vscode-editor-background") || "";
   const fg = fgColorOverride || css("--vscode-terminal-foreground") || css("--vscode-editor-foreground") || "";
   return {
@@ -60,6 +85,10 @@ function buildTheme(): ITheme {
     white: css("--vscode-terminal-ansiWhite") || undefined,
     brightWhite: css("--vscode-terminal-ansiBrightWhite") || undefined,
   };
+}
+
+function buildTheme(): ITheme {
+  return buildThemeFromColors(globalThemeColors);
 }
 
 function getTermFontFamily(): string {
@@ -103,14 +132,17 @@ function applyZoom(cell: Cell): void {
 
 // ── Apply background color override to containers ──
 function applyBgOverride(): void {
-  const bg = bgColorOverride;
-  if (!bg) return;
-  document.body.style.background = bg;
-  grid.style.background = bg;
+  const bg = bgColorOverride || (globalThemeColors?.background ?? "");
+  document.body.style.background = bg || "";
+  grid.style.background = bg || "";
   for (const cell of cells) {
-    cell.el.style.background = bg;
+    const idx = cells.indexOf(cell);
+    const ov = cellOverrides[idx];
+    // Skip cells with their own bg override or cell-level theme
+    if (ov?.bgColor || ov?.themeColors?.background) continue;
+    cell.el.style.background = bg || "";
     cell.el.querySelectorAll<HTMLElement>(".term-container, .xterm, .xterm-viewport, .xterm-screen").forEach(el => {
-      el.style.backgroundColor = bg;
+      el.style.backgroundColor = bg || "";
     });
   }
 }
@@ -262,6 +294,9 @@ ctxMenu.addEventListener("click", (e: Event) => {
   }
 });
 
+// ── Per-cell overrides ──
+const cellOverrides: Record<number, { bgColor: string; fgColor: string; fontFamily: string; themeName: string; themeColors: Record<string, string> | null }> = {};
+
 // Apply initial background override if set
 applyBgOverride();
 
@@ -293,13 +328,14 @@ requestAnimationFrame(() => {
   }, 100);
 });
 
-// ── Per-cell overrides ──
-const cellOverrides: Record<number, { bgColor: string; fgColor: string; fontFamily: string }> = {};
-
 function buildCellTheme(cellId: number): ITheme {
   const ov = cellOverrides[cellId];
   if (!ov) return buildTheme();
-  const base = buildTheme();
+  // If cell has its own theme, use that as base; otherwise use global theme
+  const base = ov.themeColors !== undefined && ov.themeColors !== null
+    ? buildThemeFromColors(ov.themeColors)
+    : (ov.themeName === "" ? buildThemeFromColors(null) : buildTheme());
+  // Apply per-cell bg/fg overrides on top
   if (ov.bgColor) {
     base.background = ov.bgColor;
     base.cursorAccent = ov.bgColor;
@@ -359,10 +395,12 @@ window.addEventListener("message", (event) => {
       fontFamilyOverride = msg.fontFamily;
       bgColorOverride = msg.bgColor || "";
       fgColorOverride = msg.fgColor || "";
+      if (msg.themeName !== undefined) globalThemeName = msg.themeName;
+      if (msg.themeColors !== undefined) globalThemeColors = msg.themeColors;
       {
         for (let ci = 0; ci < cells.length; ci++) {
           const ov = cellOverrides[ci];
-          if (ov && (ov.bgColor || ov.fgColor || ov.fontFamily)) {
+          if (ov && (ov.bgColor || ov.fgColor || ov.fontFamily || ov.themeName)) {
             cells[ci].terminal.options.theme = buildCellTheme(ci);
             cells[ci].terminal.options.fontFamily = ov.fontFamily || getTermFontFamily();
           } else {
@@ -375,8 +413,8 @@ window.addEventListener("message", (event) => {
         applyBgOverride();
         for (let ci = 0; ci < cells.length; ci++) {
           const ov = cellOverrides[ci];
-          if (ov?.bgColor) {
-            applyCellBgOverride(cells[ci], ov.bgColor);
+          if (ov?.bgColor || ov?.themeColors?.background) {
+            applyCellBgOverride(cells[ci], ov.bgColor || ov.themeColors?.background || "");
           }
         }
       }
@@ -401,11 +439,13 @@ window.addEventListener("message", (event) => {
         bgColor: msg.bgColor || "",
         fgColor: msg.fgColor || "",
         fontFamily: msg.fontFamily || "",
+        themeName: msg.themeName ?? "",
+        themeColors: msg.themeColors ?? null,
       };
       cell.terminal.options.theme = buildCellTheme(msg.id);
       cell.terminal.options.fontFamily = msg.fontFamily || getTermFontFamily();
       cell.fitAddon.fit();
-      applyCellBgOverride(cell, msg.bgColor || "");
+      applyCellBgOverride(cell, msg.bgColor || cellOverrides[msg.id]?.themeColors?.background || "");
       break;
     }
     case "clearCellOverrides": {
@@ -426,6 +466,134 @@ window.addEventListener("message", (event) => {
   }
 });
 
+// ── Grid border drag-resize (Excel-like) ──
+const colFr: number[] = Array(cols).fill(1);
+const rowFr: number[] = Array(rows).fill(1);
+const MIN_FR = 0.15;
+
+function applyGridFractions(): void {
+  grid.style.gridTemplateColumns = colFr.map(f => f + "fr").join(" ");
+  grid.style.gridTemplateRows = rowFr.map(f => f + "fr").join(" ");
+}
+
+function createResizers(): void {
+  grid.querySelectorAll(".grid-resizer").forEach(el => el.remove());
+  // Column resizers (between each pair of adjacent columns)
+  for (let c = 0; c < cols - 1; c++) {
+    const handle = document.createElement("div");
+    handle.className = "grid-resizer col-resizer";
+    handle.dataset.col = String(c);
+    grid.appendChild(handle);
+    handle.addEventListener("pointerdown", (e) => startDrag(e, "col", c, handle));
+    handle.addEventListener("dblclick", () => {
+      colFr[c] = 1; colFr[c + 1] = 1;
+      applyGridFractions(); positionResizers(); triggerFitAll();
+    });
+  }
+  // Row resizers
+  for (let r = 0; r < rows - 1; r++) {
+    const handle = document.createElement("div");
+    handle.className = "grid-resizer row-resizer";
+    handle.dataset.row = String(r);
+    grid.appendChild(handle);
+    handle.addEventListener("pointerdown", (e) => startDrag(e, "row", r, handle));
+    handle.addEventListener("dblclick", () => {
+      rowFr[r] = 1; rowFr[r + 1] = 1;
+      applyGridFractions(); positionResizers(); triggerFitAll();
+    });
+  }
+  positionResizers();
+}
+
+function positionResizers(): void {
+  if (cells.length === 0) return;
+  // Column resizers: place at the right edge of column c
+  grid.querySelectorAll<HTMLElement>(".col-resizer").forEach(el => {
+    const c = parseInt(el.dataset.col!, 10);
+    // Find the first cell in this column to get its right edge
+    const cellIdx = c; // first row, column c
+    const cellEl = cells[cellIdx]?.el;
+    if (!cellEl) return;
+    const gridRect = grid.getBoundingClientRect();
+    const cellRect = cellEl.getBoundingClientRect();
+    el.style.left = (cellRect.right - gridRect.left - 3) + "px";
+    el.style.top = "0";
+    el.style.height = "100%";
+  });
+  // Row resizers: place at the bottom edge of row r
+  grid.querySelectorAll<HTMLElement>(".row-resizer").forEach(el => {
+    const r = parseInt(el.dataset.row!, 10);
+    const cellIdx = r * cols; // column 0, row r
+    const cellEl = cells[cellIdx]?.el;
+    if (!cellEl) return;
+    const gridRect = grid.getBoundingClientRect();
+    const cellRect = cellEl.getBoundingClientRect();
+    el.style.top = (cellRect.bottom - gridRect.top - 3) + "px";
+    el.style.left = "0";
+    el.style.width = "100%";
+  });
+}
+
+function triggerFitAll(): void {
+  for (let i = 0; i < cells.length; i++) {
+    const cell = cells[i];
+    const prevCols = cell.terminal.cols;
+    const prevRows = cell.terminal.rows;
+    cell.fitAddon.fit();
+    if (cell.terminal.cols !== prevCols || cell.terminal.rows !== prevRows) {
+      vscode.postMessage({ type: "resize", id: i, cols: cell.terminal.cols, rows: cell.terminal.rows });
+    }
+  }
+}
+
+function startDrag(e: PointerEvent, axis: "col" | "row", index: number, handle: HTMLElement): void {
+  e.preventDefault();
+  e.stopPropagation();
+  const startPos = axis === "col" ? e.clientX : e.clientY;
+  const frArr = axis === "col" ? colFr : rowFr;
+  const totalPx = axis === "col" ? grid.clientWidth : grid.clientHeight;
+  const sumFr = frArr.reduce((a, b) => a + b, 0);
+  const startFrA = frArr[index];
+  const startFrB = frArr[index + 1];
+  handle.classList.add("active");
+  document.body.classList.add(axis === "col" ? "resizing-col" : "resizing-row");
+
+  let fitTimer: ReturnType<typeof setTimeout>;
+
+  function onMove(ev: PointerEvent): void {
+    const delta = (axis === "col" ? ev.clientX : ev.clientY) - startPos;
+    const deltaFr = (delta / totalPx) * sumFr;
+    let newA = startFrA + deltaFr;
+    let newB = startFrB - deltaFr;
+    // Clamp
+    if (newA < MIN_FR) { newB += newA - MIN_FR; newA = MIN_FR; }
+    if (newB < MIN_FR) { newA += newB - MIN_FR; newB = MIN_FR; }
+    frArr[index] = newA;
+    frArr[index + 1] = newB;
+    applyGridFractions();
+    positionResizers();
+    // Debounced fit
+    clearTimeout(fitTimer);
+    fitTimer = setTimeout(triggerFitAll, 80);
+  }
+
+  function onUp(): void {
+    handle.classList.remove("active");
+    document.body.classList.remove("resizing-col", "resizing-row");
+    document.removeEventListener("pointermove", onMove);
+    document.removeEventListener("pointerup", onUp);
+    triggerFitAll();
+  }
+
+  document.addEventListener("pointermove", onMove);
+  document.addEventListener("pointerup", onUp);
+}
+
+// Create resizers after cells are built
+if (cols > 1 || rows > 1) {
+  createResizers();
+}
+
 // ── Resize ──
 let resizeTimer: ReturnType<typeof setTimeout>;
 const ro = new ResizeObserver(() => {
@@ -445,6 +613,7 @@ const ro = new ResizeObserver(() => {
         });
       }
     }
+    positionResizers();
   }, 150);
 });
 ro.observe(grid);
@@ -453,7 +622,7 @@ ro.observe(grid);
 const themeObserver = new MutationObserver(() => {
   for (let ci = 0; ci < cells.length; ci++) {
     const ov = cellOverrides[ci];
-    if (ov && (ov.bgColor || ov.fgColor || ov.fontFamily)) {
+    if (ov && (ov.bgColor || ov.fgColor || ov.fontFamily || ov.themeName)) {
       cells[ci].terminal.options.theme = buildCellTheme(ci);
       cells[ci].terminal.options.fontFamily = ov.fontFamily || getTermFontFamily();
     } else {

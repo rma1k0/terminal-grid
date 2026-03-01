@@ -2,7 +2,7 @@
   "name": "terminal-grid",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "0.3.2",
+  "version": "0.3.4",
   "publisher": "koenma",
   "author": "koenma",
   "license": "MIT",
@@ -18,16 +18,19 @@
     "vscode": "^1.80.0"
   },
   "categories": [
-    "Programming Languages"
+    "Other"
   ],
   "keywords": [
     "terminal",
     "grid",
+    "split",
+    "multiplexer",
+    "tmux",
+    "pane",
+    "multi-terminal",
     "xterm",
     "mcp",
-    "multiplexer",
-    "multi-terminal",
-    "split-terminal"
+    "workspace"
   ],
   "icon": "images/icon.png",
   "galleryBanner": {
@@ -139,6 +142,11 @@
           "type": "string",
           "default": "",
           "description": "%config.foregroundColor%"
+        },
+        "terminalGrid.colorTheme": {
+          "type": "string",
+          "default": "",
+          "description": "%config.colorTheme%"
         },
         "terminalGrid.apiPort": {
           "type": "number",

@@ -1,19 +1,19 @@
-"use strict";var N=Object.create;var E=Object.defineProperty;var D=Object.getOwnPropertyDescriptor;var $=Object.getOwnPropertyNames;var A=Object.getPrototypeOf,U=Object.prototype.hasOwnProperty;var H=(d,o)=>{for(var s in o)E(d,s,{get:o[s],enumerable:!0})},F=(d,o,s,i)=>{if(o&&typeof o=="object"||typeof o=="function")for(let e of $(o))!U.call(d,e)&&e!==s&&E(d,e,{get:()=>o[e],enumerable:!(i=D(o,e))||i.enumerable});return d};var f=(d,o,s)=>(s=d!=null?N(A(d)):{},F(o||!d||!d.__esModule?E(s,"default",{value:d,enumerable:!0}):s,d)),W=d=>F(E({},"__esModule",{value:!0}),d);var X={};H(X,{activate:()=>Y,deactivate:()=>q});module.exports=W(X);var c=f(require("vscode")),G=f(require("path"));var n=f(require("vscode")),I=f(require("fs")),C=f(require("path")),M=f(require("child_process"));var u=f(require("vscode")),j=f(require("fs")),T=f(require("path")),O={".ttf":"truetype",".otf":"opentype",".woff":"woff",".woff2":"woff2"},g=class d{constructor(o,s,i,e){this._terminals=[];this._outputBuffers=[];this._disposed=!1;this._panel=o,this._context=s,this._rows=i,this._cols=e,this._panel.webview.html=this._getHtml(),this._panel.webview.onDidReceiveMessage(async t=>{switch(t.type){case"ready":if(this._createTerminals(t.defaultCols,t.defaultRows),t.cellDims&&Array.isArray(t.cellDims))for(let r=0;r<t.cellDims.length&&r<this._terminals.length;r++){let l=t.cellDims[r];if(l?.cols&&l?.rows)try{this._terminals[r].pty.resize(l.cols,l.rows)}catch{}}this.loadCustomFonts(this._context.globalState.get("customFonts",[]));let a=this._context.globalState.get("cellOverrides",{});for(let[r,l]of Object.entries(a))(l.bgColor||l.fgColor||l.fontFamily)&&this.sendCellConfig(parseInt(r),l.bgColor||"",l.fgColor||"",l.fontFamily||"");break;case"input":this._terminals[t.id]?.pty.write(t.data);break;case"resize":try{this._terminals[t.id]?.pty.resize(t.cols,t.rows)}catch{}break;case"clearTerminal":this._panel.webview.postMessage({type:"clear",id:t.id});break;case"killTerminal":try{this._terminals[t.id]?.pty.kill()}catch{}break;case"restartTerminal":this._restartTerminal(t.id);break;case"renameCell":{let r=this._context.globalState.get("cellLabels",[]),l=r[t.id]||"",p=await u.window.showInputBox({prompt:u.l10n.t("Rename cell {0}",t.id+1),value:l,placeHolder:u.l10n.t("Enter alias (empty to reset)")});p!==void 0&&(r[t.id]=p,await this._context.globalState.update("cellLabels",r),this.sendLabels(),u.commands.executeCommand("terminalGrid._refreshSidebar"));break}}}),this._configListener=u.workspace.onDidChangeConfiguration(t=>{if(t.affectsConfiguration("terminalGrid")){let a=u.workspace.getConfiguration("terminalGrid");this._panel.webview.postMessage({type:"configUpdate",zoom:a.get("zoomPercent",100),fontFamily:a.get("fontFamily",""),bgColor:a.get("backgroundColor",""),fgColor:a.get("foregroundColor","")})}}),this._panel.onDidDispose(()=>this.dispose()),this._panel.iconPath=u.Uri.joinPath(s.extensionUri,"images","sidebar.svg")}static{this.OUTPUT_BUFFER_SIZE=5e4}static _getNodePty(){if(d._nodePty===void 0)try{d._nodePty=require("node-pty")}catch{d._nodePty=null}return d._nodePty}static createOrShow(o,s,i){d.currentPanel&&d.currentPanel.dispose();let e=u.window.createWebviewPanel("terminalGrid",u.l10n.t("Terminal Grid {0}\xD7{1}",s,i),u.ViewColumn.One,{enableScripts:!0,retainContextWhenHidden:!0,localResourceRoots:[u.Uri.joinPath(o.extensionUri,"media")]});d.currentPanel=new d(e,o,s,i),o.globalState.update("lastGrid",{rows:s,cols:i})}static revive(o,s,i,e){d.currentPanel&&d.currentPanel.dispose(),d.currentPanel=new d(o,s,i,e),s.globalState.update("lastGrid",{rows:i,cols:e})}broadcastInput(o){for(let s of this._terminals)s.pty.write(o+"\r")}sendToCell(o,s){let i=this._terminals[o];return i?(i.pty.write(s),!0):!1}readCell(o,s){let i=this._outputBuffers[o];return i===void 0?null:s===void 0?i:s<=0?"":i.split(`
-`).slice(-s).join(`
-`)}getCellCount(){return this._terminals.length}getRows(){return this._rows}getCols(){return this._cols}getCellLabels(){let o=this._context.globalState.get("cellLabels",[]),s=this._rows*this._cols;return Array.from({length:s},(i,e)=>o[e]||String(e+1))}sendCellConfig(o,s,i,e){this._panel.webview.postMessage({type:"cellConfig",id:o,bgColor:s,fgColor:i,fontFamily:e})}clearCellOverrides(){this._panel.webview.postMessage({type:"clearCellOverrides"})}sendLabels(){let o=this._context.globalState.get("cellLabels",[]);this._panel.webview.postMessage({type:"setLabels",labels:o})}loadCustomFonts(o){for(let s of o){let i=this._readFontBase64(s.path);if(i){let e=T.extname(s.path).toLowerCase();this._panel.webview.postMessage({type:"loadFont",name:s.name,data:i,format:O[e]||"truetype"})}}}_readFontBase64(o){try{return j.readFileSync(o).toString("base64")}catch{return null}}_spawnPty(o,s,i,e){if(o){let l=process.platform==="win32"?"powershell.exe":process.env.SHELL||"bash",p=process.platform==="win32"?["-NoLogo","-NoProfile"]:[],m=o.spawn(l,p,{name:"xterm-256color",cols:s,rows:i,cwd:e,env:process.env});return{onData:b=>{m.onData(b)},write:b=>m.write(b),resize:(b,v)=>m.resize(b,v),kill:()=>m.kill()}}let{spawn:t}=require("child_process"),a=process.platform==="win32"?process.env.COMSPEC||"cmd.exe":process.env.SHELL||"bash",r=t(a,[],{cwd:e,env:process.env,windowsHide:!0});return{onData:l=>{r.stdout?.on("data",p=>l(p.toString())),r.stderr?.on("data",p=>l(p.toString()))},write:l=>{r.stdin?.write(l)},resize:()=>{},kill:()=>r.kill()}}_createTerminals(o,s){let i=u.workspace.workspaceFolders?.[0]?.uri.fsPath||process.env.USERPROFILE||process.env.HOME||".",e=this._rows*this._cols,t=d._getNodePty();t||u.window.showWarningMessage(u.l10n.t("node-pty not available. Falling back to basic shell (limited features)."));let a=this._context.globalState.get("startupCommands",[]),r=[];for(let m of a)if(typeof m=="string")r.push(m);else if(m&&typeof m=="object"&&"command"in m){let b=m;for(let v=0;v<(b.count||1);v++)r.push(b.command)}let l=o||80,p=s||24;for(let m=0;m<e;m++){let b=this._spawnPty(t,l,p,i),v=m;this._outputBuffers[v]="";let S=!1;b.onData(x=>{this._disposed||(this._outputBuffers[v]=(this._outputBuffers[v]||"")+x,this._outputBuffers[v].length>d.OUTPUT_BUFFER_SIZE&&(this._outputBuffers[v]=this._outputBuffers[v].slice(-d.OUTPUT_BUFFER_SIZE)),this._panel.webview.postMessage({type:"output",id:v,data:x}),!S&&r[v]&&(S=!0,this._terminals[v]?.pty.write(r[v]+"\r")))}),this._terminals.push({id:m,pty:b})}this.sendLabels()}_restartTerminal(o){let s=this._terminals[o];if(!s)return;try{s.pty.kill()}catch{}this._panel.webview.postMessage({type:"reset",id:o});let i=u.workspace.workspaceFolders?.[0]?.uri.fsPath||process.env.USERPROFILE||process.env.HOME||".",e=this._spawnPty(d._getNodePty(),80,24,i),t=this._context.globalState.get("startupCommands",[]),a=[];for(let p of t)if(typeof p=="string")a.push(p);else if(p&&typeof p=="object"&&"command"in p){let m=p;for(let b=0;b<(m.count||1);b++)a.push(m.command)}let r=a[o]||"",l=!1;this._outputBuffers[o]="",e.onData(p=>{this._disposed||(this._outputBuffers[o]=(this._outputBuffers[o]||"")+p,this._outputBuffers[o].length>d.OUTPUT_BUFFER_SIZE&&(this._outputBuffers[o]=this._outputBuffers[o].slice(-d.OUTPUT_BUFFER_SIZE)),this._panel.webview.postMessage({type:"output",id:o,data:p}),!l&&r&&(l=!0,this._terminals[o]?.pty.write(r+"\r")))}),this._terminals[o]={id:o,pty:e}}dispose(){this._disposed=!0,d.currentPanel=void 0,this._configListener?.dispose(),this._context.globalState.update("lastGrid",void 0);for(let o of this._terminals)try{o.pty.kill()}catch{}this._terminals=[],this._panel.dispose()}_buildCustomFontCss(){let o=this._context.globalState.get("customFonts",[]),s="";for(let i of o){let e=this._readFontBase64(i.path);if(!e)continue;let t=T.extname(i.path).toLowerCase(),a=O[t]||"truetype";s+=`@font-face { font-family: '${i.name}'; src: url(data:font/${t.slice(1)};base64,${e}) format('${a}'); font-display: swap; }
-`}return s}_getHtml(){let o=this._panel.webview,s=o.asWebviewUri(u.Uri.joinPath(this._context.extensionUri,"media","gridTerminal.js")),i=o.asWebviewUri(u.Uri.joinPath(this._context.extensionUri,"media","xterm.css")),e=V(),t=this._buildCustomFontCss();return`<!DOCTYPE html>
+"use strict";var A=Object.create;var P=Object.defineProperty;var U=Object.getOwnPropertyDescriptor;var W=Object.getOwnPropertyNames;var H=Object.getPrototypeOf,V=Object.prototype.hasOwnProperty;var J=(c,e)=>{for(var n in e)P(c,n,{get:e[n],enumerable:!0})},N=(c,e,n,l)=>{if(e&&typeof e=="object"||typeof e=="function")for(let t of W(e))!V.call(c,t)&&t!==n&&P(c,t,{get:()=>e[t],enumerable:!(l=U(e,t))||l.enumerable});return c};var v=(c,e,n)=>(n=c!=null?A(H(c)):{},N(e||!c||!c.__esModule?P(n,"default",{value:c,enumerable:!0}):n,c)),Z=c=>N(P({},"__esModule",{value:!0}),c);var te={};J(te,{activate:()=>Q,deactivate:()=>ee});module.exports=Z(te);var d=v(require("vscode")),G=v(require("path"));var a=v(require("vscode")),I=v(require("fs")),k=v(require("path")),z=v(require("child_process"));var g=v(require("vscode")),R=v(require("fs")),L=v(require("path"));var D={"":null,Dracula:{name:"Dracula",background:"#282a36",foreground:"#f8f8f2",cursor:"#f8f8f2",cursorAccent:"#282a36",selectionBackground:"#44475a",black:"#21222c",brightBlack:"#6272a4",red:"#ff5555",brightRed:"#ff6e6e",green:"#50fa7b",brightGreen:"#69ff94",yellow:"#f1fa8c",brightYellow:"#ffffa5",blue:"#bd93f9",brightBlue:"#d6acff",magenta:"#ff79c6",brightMagenta:"#ff92df",cyan:"#8be9fd",brightCyan:"#a4ffff",white:"#f8f8f2",brightWhite:"#ffffff"},Monokai:{name:"Monokai",background:"#272822",foreground:"#f8f8f2",cursor:"#f8f8f0",cursorAccent:"#272822",selectionBackground:"#49483e",black:"#272822",brightBlack:"#75715e",red:"#f92672",brightRed:"#f92672",green:"#a6e22e",brightGreen:"#a6e22e",yellow:"#f4bf75",brightYellow:"#f4bf75",blue:"#66d9ef",brightBlue:"#66d9ef",magenta:"#ae81ff",brightMagenta:"#ae81ff",cyan:"#a1efe4",brightCyan:"#a1efe4",white:"#f8f8f2",brightWhite:"#f9f8f5"},"Solarized Dark":{name:"Solarized Dark",background:"#002b36",foreground:"#839496",cursor:"#839496",cursorAccent:"#002b36",selectionBackground:"#073642",black:"#073642",brightBlack:"#586e75",red:"#dc322f",brightRed:"#cb4b16",green:"#859900",brightGreen:"#586e75",yellow:"#b58900",brightYellow:"#657b83",blue:"#268bd2",brightBlue:"#839496",magenta:"#d33682",brightMagenta:"#6c71c4",cyan:"#2aa198",brightCyan:"#93a1a1",white:"#eee8d5",brightWhite:"#fdf6e3"},"Solarized Light":{name:"Solarized Light",background:"#fdf6e3",foreground:"#657b83",cursor:"#657b83",cursorAccent:"#fdf6e3",selectionBackground:"#eee8d5",black:"#073642",brightBlack:"#586e75",red:"#dc322f",brightRed:"#cb4b16",green:"#859900",brightGreen:"#586e75",yellow:"#b58900",brightYellow:"#657b83",blue:"#268bd2",brightBlue:"#839496",magenta:"#d33682",brightMagenta:"#6c71c4",cyan:"#2aa198",brightCyan:"#93a1a1",white:"#eee8d5",brightWhite:"#fdf6e3"},Nord:{name:"Nord",background:"#2e3440",foreground:"#d8dee9",cursor:"#d8dee9",cursorAccent:"#2e3440",selectionBackground:"#434c5e",black:"#3b4252",brightBlack:"#4c566a",red:"#bf616a",brightRed:"#bf616a",green:"#a3be8c",brightGreen:"#a3be8c",yellow:"#ebcb8b",brightYellow:"#ebcb8b",blue:"#81a1c1",brightBlue:"#81a1c1",magenta:"#b48ead",brightMagenta:"#b48ead",cyan:"#88c0d0",brightCyan:"#8fbcbb",white:"#e5e9f0",brightWhite:"#eceff4"},"One Dark":{name:"One Dark",background:"#282c34",foreground:"#abb2bf",cursor:"#528bff",cursorAccent:"#282c34",selectionBackground:"#3e4451",black:"#282c34",brightBlack:"#5c6370",red:"#e06c75",brightRed:"#e06c75",green:"#98c379",brightGreen:"#98c379",yellow:"#e5c07b",brightYellow:"#d19a66",blue:"#61afef",brightBlue:"#61afef",magenta:"#c678dd",brightMagenta:"#c678dd",cyan:"#56b6c2",brightCyan:"#56b6c2",white:"#abb2bf",brightWhite:"#ffffff"},"Gruvbox Dark":{name:"Gruvbox Dark",background:"#282828",foreground:"#ebdbb2",cursor:"#ebdbb2",cursorAccent:"#282828",selectionBackground:"#504945",black:"#282828",brightBlack:"#928374",red:"#cc241d",brightRed:"#fb4934",green:"#98971a",brightGreen:"#b8bb26",yellow:"#d79921",brightYellow:"#fabd2f",blue:"#458588",brightBlue:"#83a598",magenta:"#b16286",brightMagenta:"#d3869b",cyan:"#689d6a",brightCyan:"#8ec07c",white:"#a89984",brightWhite:"#ebdbb2"},"Tokyo Night":{name:"Tokyo Night",background:"#1a1b26",foreground:"#a9b1d6",cursor:"#c0caf5",cursorAccent:"#1a1b26",selectionBackground:"#33467c",black:"#15161e",brightBlack:"#414868",red:"#f7768e",brightRed:"#f7768e",green:"#9ece6a",brightGreen:"#9ece6a",yellow:"#e0af68",brightYellow:"#e0af68",blue:"#7aa2f7",brightBlue:"#7aa2f7",magenta:"#bb9af7",brightMagenta:"#bb9af7",cyan:"#7dcfff",brightCyan:"#7dcfff",white:"#a9b1d6",brightWhite:"#c0caf5"}},O=Object.keys(D);function w(c){let e=D[c];if(!e)return null;let{name:n,...l}=e;return l}var M={".ttf":"truetype",".otf":"opentype",".woff":"woff",".woff2":"woff2"},u=class c{constructor(e,n,l,t){this._terminals=[];this._outputBuffers=[];this._csiUMode=[];this._disposed=!1;this._panel=e,this._context=n,this._rows=l,this._cols=t,this._panel.webview.html=this._getHtml(),this._panel.webview.onDidReceiveMessage(async o=>{switch(o.type){case"ready":if(this._createTerminals(o.defaultCols,o.defaultRows),o.cellDims&&Array.isArray(o.cellDims))for(let r=0;r<o.cellDims.length&&r<this._terminals.length;r++){let i=o.cellDims[r];if(i?.cols&&i?.rows)try{this._terminals[r].pty.resize(i.cols,i.rows)}catch{}}this.loadCustomFonts(this._context.globalState.get("customFonts",[]));let s=this._context.globalState.get("cellOverrides",{});for(let[r,i]of Object.entries(s))if(i.bgColor||i.fgColor||i.fontFamily||i.themeName){let p=i.themeName?w(i.themeName):null;this.sendCellConfig(parseInt(r),i.bgColor||"",i.fgColor||"",i.fontFamily||"",i.themeName||"",p)}break;case"input":this._terminals[o.id]?.pty.write(o.data);break;case"resize":try{this._terminals[o.id]?.pty.resize(o.cols,o.rows)}catch{}break;case"clearTerminal":this._panel.webview.postMessage({type:"clear",id:o.id});break;case"killTerminal":try{this._terminals[o.id]?.pty.kill()}catch{}break;case"restartTerminal":this._restartTerminal(o.id);break;case"renameCell":{let r=this._context.globalState.get("cellLabels",[]),i=r[o.id]||"",p=await g.window.showInputBox({prompt:g.l10n.t("Rename cell {0}",o.id+1),value:i,placeHolder:g.l10n.t("Enter alias (empty to reset)")});p!==void 0&&(r[o.id]=p,await this._context.globalState.update("cellLabels",r),this.sendLabels(),g.commands.executeCommand("terminalGrid._refreshSidebar"));break}}}),this._configListener=g.workspace.onDidChangeConfiguration(o=>{if(o.affectsConfiguration("terminalGrid")){let s=g.workspace.getConfiguration("terminalGrid"),r=s.get("colorTheme","");this._panel.webview.postMessage({type:"configUpdate",zoom:s.get("zoomPercent",100),fontFamily:s.get("fontFamily",""),bgColor:s.get("backgroundColor",""),fgColor:s.get("foregroundColor",""),themeName:r,themeColors:w(r)})}}),this._panel.onDidDispose(()=>this.dispose()),this._panel.iconPath=g.Uri.joinPath(n.extensionUri,"images","sidebar.svg")}static{this.OUTPUT_BUFFER_SIZE=5e4}static{this.CSI_U_ENABLE=/\x1b\[>[0-9]+u/}static{this.CSI_U_DISABLE=/\x1b\[<[0-9]*u/}static _getNodePty(){if(c._nodePty===void 0)try{c._nodePty=require("node-pty")}catch{c._nodePty=null}return c._nodePty}static createOrShow(e,n,l){c.currentPanel&&c.currentPanel.dispose();let t=g.window.createWebviewPanel("terminalGrid",g.l10n.t("Terminal Grid {0}\xD7{1}",n,l),g.ViewColumn.One,{enableScripts:!0,retainContextWhenHidden:!0,localResourceRoots:[g.Uri.joinPath(e.extensionUri,"media")]});c.currentPanel=new c(t,e,n,l),e.globalState.update("lastGrid",{rows:n,cols:l})}static revive(e,n,l,t){c.currentPanel&&c.currentPanel.dispose(),c.currentPanel=new c(e,n,l,t),n.globalState.update("lastGrid",{rows:l,cols:t})}_enterSeq(e){return this._csiUMode[e]?"\x1B[13u":"\r"}broadcastInput(e){let l=/\r?\n/.test(e)?"\x1B[200~"+e+"\x1B[201~":e;for(let t of this._terminals)t.pty.write(l+this._enterSeq(t.id))}sendToCell(e,n){let l=this._terminals[e];return l?(l.pty.write(n),!0):!1}sendInputToCell(e,n){let l=this._terminals[e];if(!l)return!1;let o=/\r?\n/.test(n)?"\x1B[200~"+n+"\x1B[201~":n;return l.pty.write(o+this._enterSeq(e)),!0}readCell(e,n){let l=this._outputBuffers[e];return l===void 0?null:n===void 0?l:n<=0?"":l.split(`
+`).slice(-n).join(`
+`)}getCellCount(){return this._terminals.length}getRows(){return this._rows}getCols(){return this._cols}getCellLabels(){let e=this._context.globalState.get("cellLabels",[]),n=this._rows*this._cols;return Array.from({length:n},(l,t)=>e[t]||String(t+1))}sendCellConfig(e,n,l,t,o,s){this._panel.webview.postMessage({type:"cellConfig",id:e,bgColor:n,fgColor:l,fontFamily:t,themeName:o??"",themeColors:s??null})}clearCellOverrides(){this._panel.webview.postMessage({type:"clearCellOverrides"})}sendLabels(){let e=this._context.globalState.get("cellLabels",[]);this._panel.webview.postMessage({type:"setLabels",labels:e})}loadCustomFonts(e){for(let n of e){let l=this._readFontBase64(n.path);if(l){let t=L.extname(n.path).toLowerCase();this._panel.webview.postMessage({type:"loadFont",name:n.name,data:l,format:M[t]||"truetype"})}}}_readFontBase64(e){try{return R.readFileSync(e).toString("base64")}catch{return null}}_spawnPty(e,n,l,t){if(e){let i=process.platform==="win32"?"powershell.exe":process.env.SHELL||"bash",p=process.platform==="win32"?["-NoLogo","-NoProfile"]:[],m=e.spawn(i,p,{name:"xterm-256color",cols:n,rows:l,cwd:t,env:process.env});return{onData:f=>{m.onData(f)},write:f=>m.write(f),resize:(f,b)=>m.resize(f,b),kill:()=>m.kill()}}let{spawn:o}=require("child_process"),s=process.platform==="win32"?process.env.COMSPEC||"cmd.exe":process.env.SHELL||"bash",r=o(s,[],{cwd:t,env:process.env,windowsHide:!0});return{onData:i=>{r.stdout?.on("data",p=>i(p.toString())),r.stderr?.on("data",p=>i(p.toString()))},write:i=>{r.stdin?.write(i)},resize:()=>{},kill:()=>r.kill()}}_createTerminals(e,n){let l=g.workspace.workspaceFolders?.[0]?.uri.fsPath||process.env.USERPROFILE||process.env.HOME||".",t=this._rows*this._cols,o=c._getNodePty();o||g.window.showWarningMessage(g.l10n.t("node-pty not available. Falling back to basic shell (limited features)."));let s=this._context.globalState.get("startupCommands",[]),r=[];for(let m of s)if(typeof m=="string")r.push(m);else if(m&&typeof m=="object"&&"command"in m){let f=m;for(let b=0;b<(f.count||1);b++)r.push(f.command)}let i=e||80,p=n||24;for(let m=0;m<t;m++){let f=this._spawnPty(o,i,p,l),b=m;this._outputBuffers[b]="",this._csiUMode[b]=!1;let E=!1;f.onData(h=>{this._disposed||(c.CSI_U_ENABLE.test(h)&&(this._csiUMode[b]=!0),c.CSI_U_DISABLE.test(h)&&(this._csiUMode[b]=!1),this._outputBuffers[b]=(this._outputBuffers[b]||"")+h,this._outputBuffers[b].length>c.OUTPUT_BUFFER_SIZE&&(this._outputBuffers[b]=this._outputBuffers[b].slice(-c.OUTPUT_BUFFER_SIZE)),this._panel.webview.postMessage({type:"output",id:b,data:h}),!E&&r[b]&&(E=!0,this._terminals[b]?.pty.write(r[b]+"\r")))}),this._terminals.push({id:m,pty:f})}this.sendLabels()}_restartTerminal(e){let n=this._terminals[e];if(!n)return;try{n.pty.kill()}catch{}this._panel.webview.postMessage({type:"reset",id:e});let l=g.workspace.workspaceFolders?.[0]?.uri.fsPath||process.env.USERPROFILE||process.env.HOME||".",t=this._spawnPty(c._getNodePty(),80,24,l),o=this._context.globalState.get("startupCommands",[]),s=[];for(let p of o)if(typeof p=="string")s.push(p);else if(p&&typeof p=="object"&&"command"in p){let m=p;for(let f=0;f<(m.count||1);f++)s.push(m.command)}let r=s[e]||"",i=!1;this._outputBuffers[e]="",this._csiUMode[e]=!1,t.onData(p=>{this._disposed||(c.CSI_U_ENABLE.test(p)&&(this._csiUMode[e]=!0),c.CSI_U_DISABLE.test(p)&&(this._csiUMode[e]=!1),this._outputBuffers[e]=(this._outputBuffers[e]||"")+p,this._outputBuffers[e].length>c.OUTPUT_BUFFER_SIZE&&(this._outputBuffers[e]=this._outputBuffers[e].slice(-c.OUTPUT_BUFFER_SIZE)),this._panel.webview.postMessage({type:"output",id:e,data:p}),!i&&r&&(i=!0,this._terminals[e]?.pty.write(r+"\r")))}),this._terminals[e]={id:e,pty:t}}dispose(){this._disposed=!0,c.currentPanel=void 0,this._configListener?.dispose(),this._context.globalState.update("lastGrid",void 0);for(let e of this._terminals)try{e.pty.kill()}catch{}this._terminals=[],this._panel.dispose()}_buildCustomFontCss(){let e=this._context.globalState.get("customFonts",[]),n="";for(let l of e){let t=this._readFontBase64(l.path);if(!t)continue;let o=L.extname(l.path).toLowerCase(),s=M[o]||"truetype";n+=`@font-face { font-family: '${l.name}'; src: url(data:font/${o.slice(1)};base64,${t}) format('${s}'); font-display: swap; }
+`}return n}_getHtml(){let e=this._panel.webview,n=e.asWebviewUri(g.Uri.joinPath(this._context.extensionUri,"media","gridTerminal.js")),l=e.asWebviewUri(g.Uri.joinPath(this._context.extensionUri,"media","xterm.css")),t=Y(),o=this._buildCustomFontCss();return`<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'none';
-                 style-src ${o.cspSource} 'unsafe-inline';
-                 script-src 'nonce-${e}';
-                 font-src ${o.cspSource} data:;">
+                 style-src ${e.cspSource} 'unsafe-inline';
+                 script-src 'nonce-${t}';
+                 font-src ${e.cspSource} data:;">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="${i}">
+  <link rel="stylesheet" href="${l}">
   <style>
-    ${t}
+    ${o}
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body {
       width: 100%; height: 100%;
@@ -27,6 +27,7 @@
       width: 100%; height: 100%;
       gap: 2px;
       padding: 2px;
+      position: relative;
     }
     .cell {
       overflow: hidden;
@@ -62,6 +63,25 @@
       color: var(--vscode-textLink-foreground, #3794ff);
       opacity: 0.7;
     }
+    .grid-resizer {
+      position: absolute;
+      z-index: 20;
+      background: transparent;
+    }
+    .grid-resizer:hover, .grid-resizer.active {
+      background: var(--vscode-focusBorder, #007fd4);
+      opacity: 0.45;
+    }
+    .grid-resizer.col-resizer {
+      top: 0; width: 6px; height: 100%;
+      cursor: col-resize;
+    }
+    .grid-resizer.row-resizer {
+      left: 0; height: 6px; width: 100%;
+      cursor: row-resize;
+    }
+    body.resizing-col, body.resizing-col * { cursor: col-resize !important; }
+    body.resizing-row, body.resizing-row * { cursor: row-resize !important; }
     .term-container {
       flex: 1;
       overflow: hidden;
@@ -105,31 +125,33 @@
 <body>
   <div id="grid"></div>
   <div class="ctx-menu" id="ctxMenu">
-    <div class="ctx-menu-item" data-action="copy">${u.l10n.t("Copy")}</div>
-    <div class="ctx-menu-item" data-action="paste">${u.l10n.t("Paste")}</div>
+    <div class="ctx-menu-item" data-action="copy">${g.l10n.t("Copy")}</div>
+    <div class="ctx-menu-item" data-action="paste">${g.l10n.t("Paste")}</div>
     <div class="ctx-menu-sep"></div>
-    <div class="ctx-menu-item" data-action="clear">${u.l10n.t("Clear")}</div>
-    <div class="ctx-menu-item" data-action="restart">${u.l10n.t("Restart")}</div>
-    <div class="ctx-menu-item" data-action="kill">${u.l10n.t("Kill")}</div>
+    <div class="ctx-menu-item" data-action="clear">${g.l10n.t("Clear")}</div>
+    <div class="ctx-menu-item" data-action="restart">${g.l10n.t("Restart")}</div>
+    <div class="ctx-menu-item" data-action="kill">${g.l10n.t("Kill")}</div>
     <div class="ctx-menu-sep"></div>
-    <div class="ctx-menu-item" data-action="rename">${u.l10n.t("Rename")}</div>
+    <div class="ctx-menu-item" data-action="rename">${g.l10n.t("Rename")}</div>
   </div>
-  <script nonce="${e}">
+  <script nonce="${t}">
     var __GRID_ROWS = ${this._rows};
     var __GRID_COLS = ${this._cols};
-    var __GRID_ZOOM = ${u.workspace.getConfiguration("terminalGrid").get("zoomPercent",100)};
-    var __GRID_FONT_FAMILY = ${JSON.stringify(u.workspace.getConfiguration("terminalGrid").get("fontFamily",""))};
-    var __GRID_BG_COLOR = ${JSON.stringify(u.workspace.getConfiguration("terminalGrid").get("backgroundColor",""))};
-    var __GRID_FG_COLOR = ${JSON.stringify(u.workspace.getConfiguration("terminalGrid").get("foregroundColor",""))};
+    var __GRID_ZOOM = ${g.workspace.getConfiguration("terminalGrid").get("zoomPercent",100)};
+    var __GRID_FONT_FAMILY = ${JSON.stringify(g.workspace.getConfiguration("terminalGrid").get("fontFamily",""))};
+    var __GRID_BG_COLOR = ${JSON.stringify(g.workspace.getConfiguration("terminalGrid").get("backgroundColor",""))};
+    var __GRID_FG_COLOR = ${JSON.stringify(g.workspace.getConfiguration("terminalGrid").get("foregroundColor",""))};
+    var __GRID_THEME = ${JSON.stringify(g.workspace.getConfiguration("terminalGrid").get("colorTheme",""))};
+    var __GRID_THEME_COLORS = ${JSON.stringify(w(g.workspace.getConfiguration("terminalGrid").get("colorTheme","")))};
   </script>
-  <script nonce="${e}" src="${s}"></script>
+  <script nonce="${t}" src="${n}"></script>
 </body>
-</html>`}};function V(){let d="",o="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";for(let s=0;s<32;s++)d+=o.charAt(Math.floor(Math.random()*o.length));return d}var J=[".ttf",".otf",".woff",".woff2"];function Z(){try{return require("node-pty"),!0}catch{return!1}}var k=class{static{this.viewType="terminalGrid.sidebarView"}constructor(o){this._context=o}resolveWebviewView(o,s,i){this._view=o,o.webview.options={enableScripts:!0,localResourceRoots:[this._context.extensionUri]},o.webview.html=this._getHtml(),o.webview.onDidReceiveMessage(async e=>{switch(e.type){case"openGrid":await n.commands.executeCommand("terminalGrid.openCustomGrid",e.rows,e.cols),this.sendConfig();break;case"reload":await n.commands.executeCommand("workbench.action.reloadWindow");break;case"setConfig":{let t=n.workspace.getConfiguration("terminalGrid");e.key&&e.value!==void 0&&await t.update(e.key,e.value,n.ConfigurationTarget.Global);break}case"getConfig":{this.sendConfig();break}case"browseFont":{let t=await n.window.showOpenDialog({canSelectMany:!1,filters:{"Font Files":["ttf","otf","woff","woff2"]},title:n.l10n.t("Select Font File")});if(!t||t.length===0)break;let a=t[0].fsPath,r=C.extname(a).toLowerCase();if(!J.includes(r)){n.window.showWarningMessage(n.l10n.t("Unsupported font format. Use .ttf, .otf, .woff, or .woff2"));break}try{I.accessSync(a,I.constants.R_OK)}catch{n.window.showErrorMessage(n.l10n.t("Cannot read font file."));break}let l=C.basename(a,r),p=this._context.globalState.get("customFonts",[]);p.some(m=>m.path===a)||(p.push({name:l,path:a}),await this._context.globalState.update("customFonts",p)),this.sendConfig(),g.currentPanel&&g.currentPanel.loadCustomFonts([{name:l,path:a}]);break}case"removeFont":{let a=this._context.globalState.get("customFonts",[]).filter(r=>r.name!==e.name);await this._context.globalState.update("customFonts",a),this.sendConfig();break}case"addStartupCommand":{let t=this._context.globalState.get("startupCommands",[]);t.push({command:e.command,count:1}),await this._context.globalState.update("startupCommands",t),this.sendConfig();break}case"removeStartupCommand":{let t=this._context.globalState.get("startupCommands",[]);t.splice(e.index,1),await this._context.globalState.update("startupCommands",t),this.sendConfig();break}case"updateCommandCount":{let t=this._context.globalState.get("startupCommands",[]);t[e.index]&&(t[e.index].count=Math.max(1,e.count),await this._context.globalState.update("startupCommands",t)),this.sendConfig();break}case"addProject":{let t=this._context.globalState.get("projects",[]);t.some(a=>a.path===e.path)||(t.push({name:e.name,path:e.path}),await this._context.globalState.update("projects",t)),this.sendConfig();break}case"removeProject":{let t=this._context.globalState.get("projects",[]);t.splice(e.index,1),await this._context.globalState.update("projects",t),this.sendConfig();break}case"openProject":{let t=n.Uri.file(e.path);await n.commands.executeCommand("vscode.openFolder",t);break}case"addCurrentProject":{let t=n.workspace.workspaceFolders?.[0];if(!t){n.window.showWarningMessage(n.l10n.t("No workspace folder open."));break}let a=this._context.globalState.get("projects",[]),r=t.uri.fsPath;a.some(l=>l.path===r)||(a.push({name:t.name,path:r}),await this._context.globalState.update("projects",a)),this.sendConfig();break}case"browseProject":{let t=await n.window.showOpenDialog({canSelectFiles:!1,canSelectFolders:!0,canSelectMany:!1,title:n.l10n.t("Select Project Folder")});if(!t||t.length===0)break;let a=t[0].fsPath,r=C.basename(a),l=this._context.globalState.get("projects",[]);l.some(p=>p.path===a)||(l.push({name:r,path:a}),await this._context.globalState.update("projects",l)),this.sendConfig();break}case"savePreset":{await this._savePreset(e.name),this.sendConfig();break}case"loadPreset":{let a=this._context.globalState.get("presets",[]).find(l=>l.name===e.name);if(!a)break;let r=n.workspace.getConfiguration("terminalGrid");await r.update("defaultRows",a.rows,n.ConfigurationTarget.Global),await r.update("defaultCols",a.cols,n.ConfigurationTarget.Global),await r.update("zoomPercent",a.zoomPercent,n.ConfigurationTarget.Global),await r.update("fontFamily",a.fontFamily,n.ConfigurationTarget.Global),await r.update("backgroundColor",a.bgColor,n.ConfigurationTarget.Global),await r.update("foregroundColor",a.fgColor,n.ConfigurationTarget.Global),await this._context.globalState.update("startupCommands",a.startupCommands||[]),await this._context.globalState.update("cellLabels",a.cellLabels||[]),g.createOrShow(this._context,a.rows,a.cols),this.sendConfig();break}case"deletePreset":{let a=this._context.globalState.get("presets",[]).filter(l=>l.name!==e.name);await this._context.globalState.update("presets",a);let r=this._context.globalState.get("projectPresets",{});for(let l of Object.keys(r))r[l]===e.name&&delete r[l];await this._context.globalState.update("projectPresets",r),this.sendConfig();break}case"linkPreset":{let t=this._context.globalState.get("projectPresets",{});e.presetName?t[e.projectPath]=e.presetName:delete t[e.projectPath],await this._context.globalState.update("projectPresets",t),this.sendConfig();break}case"broadcast":{g.currentPanel?g.currentPanel.broadcastInput(e.text):n.window.showWarningMessage(n.l10n.t("No terminal grid is open."));break}case"broadcastToCell":{if(g.currentPanel)for(let t of e.cellIds)g.currentPanel.sendToCell(t,e.text+"\r");else n.window.showWarningMessage(n.l10n.t("No terminal grid is open."));break}case"setCellConfig":{let t=this._context.globalState.get("cellOverrides",{});t[e.cellId]={bgColor:e.bgColor||"",fgColor:e.fgColor||"",fontFamily:e.fontFamily||""},await this._context.globalState.update("cellOverrides",t),g.currentPanel&&g.currentPanel.sendCellConfig(e.cellId,e.bgColor||"",e.fgColor||"",e.fontFamily||"");break}case"clearAllCellOverrides":{await this._context.globalState.update("cellOverrides",{}),g.currentPanel&&g.currentPanel.clearCellOverrides();break}case"saveSectionStates":{await this._context.globalState.update("sectionStates",e.states);break}case"installNodePty":{try{await n.window.withProgress({location:n.ProgressLocation.Notification,title:n.l10n.t("Installing node-pty\u2026"),cancellable:!1},()=>new Promise((r,l)=>{M.exec("npm install node-pty",{cwd:this._context.extensionPath},p=>{p?l(p):r()})})),this._view?.webview.postMessage({type:"ptyInstallResult",success:!0});let t=n.l10n.t("Reload Window");await n.window.showInformationMessage(n.l10n.t("node-pty installed successfully. Reload window to activate."),t)===t&&n.commands.executeCommand("workbench.action.reloadWindow")}catch(t){let a=t instanceof Error?t.message:String(t);n.window.showErrorMessage(n.l10n.t("node-pty install failed: {0}",a)),this._view?.webview.postMessage({type:"ptyInstallResult",success:!1})}break}}}),n.workspace.onDidChangeConfiguration(e=>{e.affectsConfiguration("terminalGrid")&&this.sendConfig()})}async _savePreset(o){let s=n.workspace.getConfiguration("terminalGrid"),i={name:o,rows:s.get("defaultRows",2),cols:s.get("defaultCols",3),startupCommands:this._context.globalState.get("startupCommands",[]),cellLabels:this._context.globalState.get("cellLabels",[]),zoomPercent:s.get("zoomPercent",100),fontFamily:s.get("fontFamily",""),bgColor:s.get("backgroundColor",""),fgColor:s.get("foregroundColor","")},e=this._context.globalState.get("presets",[]),t=e.findIndex(a=>a.name===o);t>=0?e[t]=i:e.push(i),await this._context.globalState.update("presets",e)}sendConfig(){if(!this._view)return;let o=n.workspace.getConfiguration("terminalGrid"),s=this._context.globalState.get("customFonts",[]),i=this._context.globalState.get("startupCommands",[]),e=this._context.globalState.get("projects",[]),t=this._context.globalState.get("presets",[]),a=this._context.globalState.get("projectPresets",{}),r=this._context.globalState.get("cellLabels",[]),l=this._context.globalState.get("cellOverrides",{}),p=this._context.globalState.get("sectionStates",{}),m=n.workspace.workspaceFolders?.[0]?.uri.fsPath||"",b=g.currentPanel;this._view.webview.postMessage({type:"configValues",zoom:o.get("zoomPercent",100),fontFamily:o.get("fontFamily",""),bgColor:o.get("backgroundColor",""),fgColor:o.get("foregroundColor",""),customFonts:s.map(v=>v.name),startupCommands:i,projects:e,presets:t,projectPresets:a,cellLabels:r,cellOverrides:l,sectionStates:p,workspacePath:m,gridRows:b?.getRows()??0,gridCols:b?.getCols()??0})}_getHtml(){let o=K();return`<!DOCTYPE html>
+</html>`}};function Y(){let c="",e="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";for(let n=0;n<32;n++)c+=e.charAt(Math.floor(Math.random()*e.length));return c}var K=[".ttf",".otf",".woff",".woff2"];function q(){try{return require("node-pty"),!0}catch{return!1}}var _=class{constructor(e){this._mcpPort=0;this._context=e}static{this.viewType="terminalGrid.sidebarView"}setMcpPort(e){this._mcpPort=e,this._view?.webview.postMessage({type:"mcpPort",port:e})}resolveWebviewView(e,n,l){this._view=e,e.webview.options={enableScripts:!0,localResourceRoots:[this._context.extensionUri]},e.webview.html=this._getHtml(),e.webview.onDidReceiveMessage(async t=>{switch(t.type){case"openGrid":await a.commands.executeCommand("terminalGrid.openCustomGrid",t.rows,t.cols),this.sendConfig();break;case"reload":await a.commands.executeCommand("workbench.action.reloadWindow");break;case"setConfig":{let o=a.workspace.getConfiguration("terminalGrid");t.key&&t.value!==void 0&&await o.update(t.key,t.value,a.ConfigurationTarget.Global);break}case"getConfig":{this.sendConfig();break}case"browseFont":{let o=await a.window.showOpenDialog({canSelectMany:!1,filters:{"Font Files":["ttf","otf","woff","woff2"]},title:a.l10n.t("Select Font File")});if(!o||o.length===0)break;let s=o[0].fsPath,r=k.extname(s).toLowerCase();if(!K.includes(r)){a.window.showWarningMessage(a.l10n.t("Unsupported font format. Use .ttf, .otf, .woff, or .woff2"));break}try{I.accessSync(s,I.constants.R_OK)}catch{a.window.showErrorMessage(a.l10n.t("Cannot read font file."));break}let i=k.basename(s,r),p=this._context.globalState.get("customFonts",[]);p.some(m=>m.path===s)||(p.push({name:i,path:s}),await this._context.globalState.update("customFonts",p)),this.sendConfig(),u.currentPanel&&u.currentPanel.loadCustomFonts([{name:i,path:s}]);break}case"removeFont":{let s=this._context.globalState.get("customFonts",[]).filter(r=>r.name!==t.name);await this._context.globalState.update("customFonts",s),this.sendConfig();break}case"addStartupCommand":{let o=this._context.globalState.get("startupCommands",[]);o.push({command:t.command,count:1}),await this._context.globalState.update("startupCommands",o),this.sendConfig();break}case"removeStartupCommand":{let o=this._context.globalState.get("startupCommands",[]);o.splice(t.index,1),await this._context.globalState.update("startupCommands",o),this.sendConfig();break}case"updateCommandCount":{let o=this._context.globalState.get("startupCommands",[]);o[t.index]&&(o[t.index].count=Math.max(1,t.count),await this._context.globalState.update("startupCommands",o)),this.sendConfig();break}case"addProject":{let o=this._context.globalState.get("projects",[]);o.some(s=>s.path===t.path)||(o.push({name:t.name,path:t.path}),await this._context.globalState.update("projects",o)),this.sendConfig();break}case"removeProject":{let o=this._context.globalState.get("projects",[]);o.splice(t.index,1),await this._context.globalState.update("projects",o),this.sendConfig();break}case"openProject":{let o=a.Uri.file(t.path);await a.commands.executeCommand("vscode.openFolder",o,{forceNewWindow:!!t.newWindow});break}case"addCurrentProject":{let o=a.workspace.workspaceFolders?.[0];if(!o){a.window.showWarningMessage(a.l10n.t("No workspace folder open."));break}let s=this._context.globalState.get("projects",[]),r=o.uri.fsPath;s.some(i=>i.path===r)||(s.push({name:o.name,path:r}),await this._context.globalState.update("projects",s)),this.sendConfig();break}case"browseProject":{let o=await a.window.showOpenDialog({canSelectFiles:!1,canSelectFolders:!0,canSelectMany:!1,title:a.l10n.t("Select Project Folder")});if(!o||o.length===0)break;let s=o[0].fsPath,r=k.basename(s),i=this._context.globalState.get("projects",[]);i.some(p=>p.path===s)||(i.push({name:r,path:s}),await this._context.globalState.update("projects",i)),this.sendConfig();break}case"savePreset":{await this._savePreset(t.name),this.sendConfig();break}case"loadPreset":{let s=this._context.globalState.get("presets",[]).find(i=>i.name===t.name);if(!s)break;let r=a.workspace.getConfiguration("terminalGrid");await r.update("defaultRows",s.rows,a.ConfigurationTarget.Global),await r.update("defaultCols",s.cols,a.ConfigurationTarget.Global),await r.update("zoomPercent",s.zoomPercent,a.ConfigurationTarget.Global),await r.update("fontFamily",s.fontFamily,a.ConfigurationTarget.Global),await r.update("backgroundColor",s.bgColor,a.ConfigurationTarget.Global),await r.update("foregroundColor",s.fgColor,a.ConfigurationTarget.Global),await r.update("colorTheme",s.colorTheme||"",a.ConfigurationTarget.Global),await this._context.globalState.update("startupCommands",s.startupCommands||[]),await this._context.globalState.update("cellLabels",s.cellLabels||[]),u.createOrShow(this._context,s.rows,s.cols),this.sendConfig();break}case"deletePreset":{let s=this._context.globalState.get("presets",[]).filter(i=>i.name!==t.name);await this._context.globalState.update("presets",s);let r=this._context.globalState.get("projectPresets",{});for(let i of Object.keys(r))r[i]===t.name&&delete r[i];await this._context.globalState.update("projectPresets",r),this.sendConfig();break}case"linkPreset":{let o=this._context.globalState.get("projectPresets",{});t.presetName?o[t.projectPath]=t.presetName:delete o[t.projectPath],await this._context.globalState.update("projectPresets",o),this.sendConfig();break}case"broadcast":{u.currentPanel?u.currentPanel.broadcastInput(t.text):a.window.showWarningMessage(a.l10n.t("No terminal grid is open."));break}case"broadcastToCell":{if(u.currentPanel)for(let o of t.cellIds)u.currentPanel.sendInputToCell(o,t.text);else a.window.showWarningMessage(a.l10n.t("No terminal grid is open."));break}case"setCellConfig":{let o=this._context.globalState.get("cellOverrides",{});if(o[t.cellId]={bgColor:t.bgColor||"",fgColor:t.fgColor||"",fontFamily:t.fontFamily||"",themeName:t.themeName||""},await this._context.globalState.update("cellOverrides",o),u.currentPanel){let s=t.themeName?w(t.themeName):null;u.currentPanel.sendCellConfig(t.cellId,t.bgColor||"",t.fgColor||"",t.fontFamily||"",t.themeName||"",s)}break}case"clearAllCellOverrides":{await this._context.globalState.update("cellOverrides",{}),u.currentPanel&&u.currentPanel.clearCellOverrides();break}case"saveSectionStates":{await this._context.globalState.update("sectionStates",t.states);break}case"installNodePty":{try{await a.window.withProgress({location:a.ProgressLocation.Notification,title:a.l10n.t("Installing node-pty\u2026"),cancellable:!1},()=>new Promise((r,i)=>{z.exec("npm install node-pty",{cwd:this._context.extensionPath},p=>{p?i(p):r()})})),this._view?.webview.postMessage({type:"ptyInstallResult",success:!0});let o=a.l10n.t("Reload Window");await a.window.showInformationMessage(a.l10n.t("node-pty installed successfully. Reload window to activate."),o)===o&&a.commands.executeCommand("workbench.action.reloadWindow")}catch(o){let s=o instanceof Error?o.message:String(o);a.window.showErrorMessage(a.l10n.t("node-pty install failed: {0}",s)),this._view?.webview.postMessage({type:"ptyInstallResult",success:!1})}break}}}),a.workspace.onDidChangeConfiguration(t=>{t.affectsConfiguration("terminalGrid")&&this.sendConfig()})}async _savePreset(e){let n=a.workspace.getConfiguration("terminalGrid"),l={name:e,rows:n.get("defaultRows",2),cols:n.get("defaultCols",3),startupCommands:this._context.globalState.get("startupCommands",[]),cellLabels:this._context.globalState.get("cellLabels",[]),zoomPercent:n.get("zoomPercent",100),fontFamily:n.get("fontFamily",""),bgColor:n.get("backgroundColor",""),fgColor:n.get("foregroundColor",""),colorTheme:n.get("colorTheme","")},t=this._context.globalState.get("presets",[]),o=t.findIndex(s=>s.name===e);o>=0?t[o]=l:t.push(l),await this._context.globalState.update("presets",t)}sendConfig(){if(!this._view)return;let e=a.workspace.getConfiguration("terminalGrid"),n=this._context.globalState.get("customFonts",[]),l=this._context.globalState.get("startupCommands",[]),t=this._context.globalState.get("projects",[]),o=this._context.globalState.get("presets",[]),s=this._context.globalState.get("projectPresets",{}),r=this._context.globalState.get("cellLabels",[]),i=this._context.globalState.get("cellOverrides",{}),p=this._context.globalState.get("sectionStates",{}),m=a.workspace.workspaceFolders?.[0]?.uri.fsPath||"",f=u.currentPanel;this._view.webview.postMessage({type:"configValues",zoom:e.get("zoomPercent",100),fontFamily:e.get("fontFamily",""),bgColor:e.get("backgroundColor",""),fgColor:e.get("foregroundColor",""),colorTheme:e.get("colorTheme",""),themeNames:O,customFonts:n.map(b=>b.name),startupCommands:l,projects:t,presets:o,projectPresets:s,cellLabels:r,cellOverrides:i,sectionStates:p,workspacePath:m,gridRows:f?.getRows()??0,gridCols:f?.getCols()??0})}_getHtml(){let e=X();return`<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${o}';">
+        content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${e}';">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -485,33 +507,36 @@
 </head>
 <body>
   <div class="container">
-    ${Z()?"":`
+    ${q()?"":`
     <div class="pty-banner" id="ptyBanner">
       <span class="pty-banner-icon">\u26A0</span>
-      <span class="pty-banner-text">${n.l10n.t("node-pty is required to use Terminal Grid.")}</span>
-      <button class="pty-banner-btn" id="ptyInstallBtn">${n.l10n.t("Install")}</button>
+      <span class="pty-banner-text">${a.l10n.t("node-pty is required to use Terminal Grid.")}</span>
+      <button class="pty-banner-btn" id="ptyInstallBtn">${a.l10n.t("Install")}</button>
     </div>
     `}
     <!-- Projects -->
     <div class="glass-card" data-section="projects">
       <div class="section-header collapsible">
-        <div class="section-label">${n.l10n.t("Projects")}</div>
+        <div class="section-label">${a.l10n.t("Projects")}</div>
         <span class="tip-wrap">
           <span class="tip-icon">?</span>
           <div class="tip-bubble">
-            ${n.l10n.t("Register projects and click to switch folders. If a preset is linked, it will be auto-applied on switch.")}
+            ${a.l10n.t("Register projects and click to switch folders. Ctrl+Click to open in a new window. If a preset is linked, it will be auto-applied on switch.")}
           </div>
         </span>
         <span class="collapse-icon">\u25BE</span>
       </div>
       <div class="section-body">
+        <div id="mcpPortInfo" style="font-size: 11px; opacity: 0.7; margin-bottom: 8px; display: ${this._mcpPort>0?"block":"none"};">
+          MCP Port: <span id="mcpPortValue">${this._mcpPort}</span>
+        </div>
         <div id="projectList" class="cmd-list"></div>
         <div class="btn-group" style="gap: 6px;">
           <button class="glass-btn" id="addCurrentProjectBtn" style="font-size: 11px; padding: 8px 10px;">
-            <span class="btn-icon" style="font-size: 12px;">+</span> ${n.l10n.t("Add Current Folder")}
+            <span class="btn-icon" style="font-size: 12px;">+</span> ${a.l10n.t("Add Current Folder")}
           </button>
           <button class="glass-btn" id="browseProjectBtn" style="font-size: 11px; padding: 8px 10px;">
-            <span class="btn-icon" style="font-size: 12px;">&#128193;</span> ${n.l10n.t("Browse Folder")}
+            <span class="btn-icon" style="font-size: 12px;">&#128193;</span> ${a.l10n.t("Browse Folder")}
           </button>
         </div>
       </div>
@@ -519,11 +544,11 @@
 
     <div class="glass-card" data-section="gridSize">
       <div class="section-header collapsible">
-        <div class="section-label">${n.l10n.t("Select Grid Size")}</div>
+        <div class="section-label">${a.l10n.t("Select Grid Size")}</div>
         <span class="tip-wrap">
           <span class="tip-icon">?</span>
           <div class="tip-bubble">
-            ${n.l10n.t("Hover to select the desired rows\xD7cols size. Supports up to 4\xD75 (20 cells). Grid opens as an editor tab, each cell is an independent terminal.")}
+            ${a.l10n.t("Hover to select the desired rows\xD7cols size. Supports up to 4\xD75 (20 cells). Grid opens as an editor tab, each cell is an independent terminal.")}
           </div>
         </span>
         <span class="collapse-icon">\u25BE</span>
@@ -534,25 +559,25 @@
         </div>
         <div class="size-label" id="sizeLabel"></div>
         <button class="glass-btn primary" id="openGridBtn">
-          <span class="btn-icon">&#9654;</span> ${n.l10n.t("Open Grid")}
+          <span class="btn-icon">&#9654;</span> ${a.l10n.t("Open Grid")}
         </button>
       </div>
     </div>
 
     <div class="glass-card" data-section="settings">
       <div class="section-header collapsible">
-        <div class="section-label">${n.l10n.t("Terminal Settings")}</div>
+        <div class="section-label">${a.l10n.t("Terminal Settings")}</div>
         <span class="tip-wrap">
           <span class="tip-icon">?</span>
           <div class="tip-bubble">
-            ${n.l10n.t("Zoom: Global font size (50\u2013300%). Font/Color: Use tabs for global or per-cell settings. Changes in All tab apply to all cells. Set global first, then customize individual cells. Individual cells can be zoomed separately with Ctrl+Wheel.")}
+            ${a.l10n.t("Zoom: Global font size (50\u2013300%). Font/Color: Use tabs for global or per-cell settings. Changes in All tab apply to all cells. Set global first, then customize individual cells. Individual cells can be zoomed separately with Ctrl+Wheel.")}
           </div>
         </span>
         <span class="collapse-icon">\u25BE</span>
       </div>
       <div class="section-body">
         <div class="setting-row">
-          <span class="setting-label">${n.l10n.t("Zoom")}</span>
+          <span class="setting-label">${a.l10n.t("Zoom")}</span>
           <div class="stepper">
             <button class="stepper-btn" id="zoomDown">\u2212</button>
             <span class="stepper-val" id="zoomVal">100%</span>
@@ -563,10 +588,21 @@
         <div id="settingsTabs" class="settings-tabs hidden"></div>
 
         <div class="setting-row">
-          <span class="setting-label">${n.l10n.t("Font")}</span>
+          <span class="setting-label">${a.l10n.t("Theme")}</span>
+          <div class="font-picker" id="themePicker">
+            <div class="font-display" id="themeDisplay">
+              <span class="font-display-text" id="themeDisplayText">${a.l10n.t("IDE Default")}</span>
+              <span class="font-display-arrow">\u25B2</span>
+            </div>
+            <div class="font-dropdown" id="themeDropdown"></div>
+          </div>
+        </div>
+
+        <div class="setting-row">
+          <span class="setting-label">${a.l10n.t("Font")}</span>
           <div class="font-picker" id="fontPicker">
             <div class="font-display" id="fontDisplay">
-              <span class="font-display-text" id="fontDisplayText">${n.l10n.t("IDE Default")}</span>
+              <span class="font-display-text" id="fontDisplayText">${a.l10n.t("IDE Default")}</span>
               <span class="font-display-arrow">\u25B2</span>
             </div>
             <div class="font-dropdown" id="fontDropdown"></div>
@@ -574,26 +610,26 @@
         </div>
 
         <div class="setting-row">
-          <span class="setting-label">${n.l10n.t("Back Color")}</span>
+          <span class="setting-label">${a.l10n.t("Back Color")}</span>
           <div class="color-row">
             <div class="color-swatch" id="bgSwatch">
               <div class="color-swatch-fill" id="bgSwatchFill"></div>
               <input type="color" id="bgColorInput" value="#1e1e1e">
             </div>
-            <span class="color-val" id="bgVal">${n.l10n.t("IDE Default")}</span>
-            <button class="color-reset hidden" id="bgReset" title="${n.l10n.t("Reset to IDE Default")}">\xD7</button>
+            <span class="color-val" id="bgVal">${a.l10n.t("IDE Default")}</span>
+            <button class="color-reset hidden" id="bgReset" title="${a.l10n.t("Reset to IDE Default")}">\xD7</button>
           </div>
         </div>
 
         <div class="setting-row">
-          <span class="setting-label">${n.l10n.t("Font Color")}</span>
+          <span class="setting-label">${a.l10n.t("Font Color")}</span>
           <div class="color-row">
             <div class="color-swatch" id="fgSwatch">
               <div class="color-swatch-fill" id="fgSwatchFill"></div>
               <input type="color" id="fgColorInput" value="#cccccc">
             </div>
-            <span class="color-val" id="fgVal">${n.l10n.t("IDE Default")}</span>
-            <button class="color-reset hidden" id="fgReset" title="${n.l10n.t("Reset to IDE Default")}">\xD7</button>
+            <span class="color-val" id="fgVal">${a.l10n.t("IDE Default")}</span>
+            <button class="color-reset hidden" id="fgReset" title="${a.l10n.t("Reset to IDE Default")}">\xD7</button>
           </div>
         </div>
       </div>
@@ -601,11 +637,11 @@
 
     <div class="glass-card" data-section="startup">
       <div class="section-header collapsible">
-        <div class="section-label">${n.l10n.t("Startup Commands")}</div>
+        <div class="section-label">${a.l10n.t("Startup Commands")}</div>
         <span class="tip-wrap">
           <span class="tip-icon">?</span>
           <div class="tip-bubble">
-            ${n.l10n.t("Commands are auto-executed in each cell when the grid opens. Use \xD7N to repeat the same command for N cells. Extra cells beyond the command list open as default terminals.")}
+            ${a.l10n.t("Commands are auto-executed in each cell when the grid opens. Use \xD7N to repeat the same command for N cells. Extra cells beyond the command list open as default terminals.")}
             <div class="tip-example">
               claude \xD73 + codex \xD71<br>
               \u2192 2\xD73 Grid:<br>
@@ -621,7 +657,7 @@
         <div class="cmd-list" id="cmdList"></div>
         <div class="cmd-add-row">
           <select class="glass-select" id="cmdPreset">
-            <option value="">${n.l10n.t("Add preset\u2026")}</option>
+            <option value="">${a.l10n.t("Add preset\u2026")}</option>
             <option value="claude">claude</option>
             <option value="codex">codex</option>
             <option value="claude --dangerously-skip-permissions">claude --dangerously-skip-permissions</option>
@@ -629,8 +665,8 @@
           </select>
         </div>
         <div class="cmd-add-row">
-          <input class="glass-input" id="cmdCustom" placeholder="${n.l10n.t("Custom command\u2026")}" />
-          <button class="stepper-btn" id="cmdAddBtn" title="${n.l10n.t("Add")}">+</button>
+          <input class="glass-input" id="cmdCustom" placeholder="${a.l10n.t("Custom command\u2026")}" />
+          <button class="stepper-btn" id="cmdAddBtn" title="${a.l10n.t("Add")}">+</button>
         </div>
       </div>
     </div>
@@ -638,33 +674,33 @@
     <!-- Presets -->
     <div class="glass-card" data-section="presets">
       <div class="section-header collapsible">
-        <div class="section-label">${n.l10n.t("Presets")}</div>
+        <div class="section-label">${a.l10n.t("Presets")}</div>
         <span class="tip-wrap">
           <span class="tip-icon">?</span>
           <div class="tip-bubble">
-            ${n.l10n.t("Save and load current grid settings (size, zoom, font, color, commands, cell labels) as presets. Use Link to project for per-project auto-apply.")}
+            ${a.l10n.t("Save and load current grid settings (size, zoom, font, color, commands, cell labels) as presets. Use Link to project for per-project auto-apply.")}
           </div>
         </span>
         <span class="collapse-icon">\u25BE</span>
       </div>
       <div class="section-body">
         <div class="cmd-add-row">
-          <input class="glass-input" id="presetNameInput" placeholder="${n.l10n.t("Preset name\u2026")}" style="flex: 1;" />
+          <input class="glass-input" id="presetNameInput" placeholder="${a.l10n.t("Preset name\u2026")}" style="flex: 1;" />
         </div>
         <div class="cmd-add-row" style="margin-top: 4px;">
           <select class="glass-select" id="presetSelect" style="flex: 1;">
-            <option value="">${n.l10n.t("Select preset\u2026")}</option>
+            <option value="">${a.l10n.t("Select preset\u2026")}</option>
           </select>
         </div>
         <div class="btn-group" style="gap: 6px; margin-top: 8px;">
           <div style="display: flex; gap: 6px;">
-            <button class="glass-btn" id="presetSaveBtn" style="font-size: 11px; padding: 8px 10px; flex: 1;">${n.l10n.t("Save")}</button>
-            <button class="glass-btn primary" id="presetLoadBtn" style="font-size: 11px; padding: 8px 10px; flex: 1;">${n.l10n.t("Load")}</button>
-            <button class="glass-btn" id="presetDeleteBtn" style="font-size: 11px; padding: 8px 10px; flex: 1;">${n.l10n.t("Delete")}</button>
+            <button class="glass-btn" id="presetSaveBtn" style="font-size: 11px; padding: 8px 10px; flex: 1;">${a.l10n.t("Save")}</button>
+            <button class="glass-btn primary" id="presetLoadBtn" style="font-size: 11px; padding: 8px 10px; flex: 1;">${a.l10n.t("Load")}</button>
+            <button class="glass-btn" id="presetDeleteBtn" style="font-size: 11px; padding: 8px 10px; flex: 1;">${a.l10n.t("Delete")}</button>
           </div>
           <div id="presetLinkRow" style="display: flex; align-items: center; gap: 6px; font-size: 11px; opacity: .7; margin-top: 4px;">
             <input type="checkbox" id="presetLinkCheck" style="margin: 0;" />
-            <label id="presetLinkLabel" for="presetLinkCheck" style="cursor: pointer;">${n.l10n.t("Link to current project")}</label>
+            <label id="presetLinkLabel" for="presetLinkCheck" style="cursor: pointer;">${a.l10n.t("Link to current project")}</label>
           </div>
         </div>
       </div>
@@ -673,47 +709,49 @@
     <!-- Broadcast Input -->
     <div class="glass-card" data-section="broadcast">
       <div class="section-header collapsible">
-        <div class="section-label">${n.l10n.t("Broadcast Input")}</div>
+        <div class="section-label">${a.l10n.t("Broadcast Input")}</div>
         <span class="tip-wrap">
           <span class="tip-icon">?</span>
           <div class="tip-bubble">
-            ${n.l10n.t("Send text to selected terminals. Check All to send to all cells, uncheck for individual selection.")}
+            ${a.l10n.t("Send text to selected terminals. Check All to send to all cells, uncheck for individual selection.")}
           </div>
         </span>
         <span class="collapse-icon">\u25BE</span>
       </div>
       <div class="section-body">
         <div id="broadcastTargets" class="broadcast-targets hidden"></div>
-        <div class="cmd-add-row">
-          <input class="glass-input" id="broadcastInput" placeholder="${n.l10n.t("Type command\u2026")}" style="flex: 1;" />
-          <button class="stepper-btn" id="broadcastSendBtn" title="${n.l10n.t("Send")}" style="width: 50px;">${n.l10n.t("Send")}</button>
+        <div class="cmd-add-row" style="flex-direction: column; gap: 4px;">
+          <textarea class="glass-input" id="broadcastInput" placeholder="${a.l10n.t("Type command\u2026")}" rows="3" style="width: 100%; resize: vertical; font-family: var(--vscode-editor-fontFamily, monospace); font-size: 12px; line-height: 1.4;"></textarea>
+          <div style="display: flex; justify-content: flex-end;">
+            <button class="stepper-btn" id="broadcastSendBtn" title="${a.l10n.t("Send")}" style="width: 50px;">${a.l10n.t("Send")}</button>
+          </div>
         </div>
       </div>
     </div>
 
     <div class="glass-card" data-section="actions">
       <div class="section-header collapsible">
-        <div class="section-label">${n.l10n.t("Actions")}</div>
+        <div class="section-label">${a.l10n.t("Actions")}</div>
         <span class="collapse-icon">\u25BE</span>
       </div>
       <div class="section-body">
         <div class="btn-group">
           <button class="glass-btn" id="reloadBtn">
-            <span class="btn-icon">&#8635;</span> ${n.l10n.t("Reload Window")}
+            <span class="btn-icon">&#8635;</span> ${a.l10n.t("Reload Window")}
           </button>
         </div>
       </div>
     </div>
 
     <div class="hint">
-      ${n.l10n.t(`Grid opens as an editor tab.
+      ${a.l10n.t(`Grid opens as an editor tab.
 Ctrl+Wheel to zoom individual cells.`).replace(`
 `,"<br>")}
     </div>
   </div>
 
-  <script nonce="${o}">
-    var __i18n = ${JSON.stringify({installing:n.l10n.t("Installing\u2026"),ideDefault:n.l10n.t("IDE Default"),remove:n.l10n.t("Remove"),addFontFile:n.l10n.t("Add font file\u2026"),all:n.l10n.t("All"),noStartupCommands:n.l10n.t("No startup commands configured"),noProjects:n.l10n.t("No projects registered"),linkedPrefix:n.l10n.t("Linked: {0}"),linkToProject:n.l10n.t("Link to current project"),selectPreset:n.l10n.t("Select preset\u2026"),reload:n.l10n.t("Reload"),retry:n.l10n.t("Retry"),ptyInstalled:n.l10n.t("node-pty installed successfully!"),ptyInstalledHint:n.l10n.t("Reload the window to activate.")})};
+  <script nonce="${e}">
+    var __i18n = ${JSON.stringify({installing:a.l10n.t("Installing\u2026"),ideDefault:a.l10n.t("IDE Default"),remove:a.l10n.t("Remove"),addFontFile:a.l10n.t("Add font file\u2026"),all:a.l10n.t("All"),noStartupCommands:a.l10n.t("No startup commands configured"),noProjects:a.l10n.t("No projects registered"),linkedPrefix:a.l10n.t("Linked: {0}"),linkToProject:a.l10n.t("Link to current project"),selectPreset:a.l10n.t("Select preset\u2026"),reload:a.l10n.t("Reload"),retry:a.l10n.t("Retry"),ptyInstalled:a.l10n.t("node-pty installed successfully!"),ptyInstalledHint:a.l10n.t("Reload the window to activate."),theme:a.l10n.t("Theme")})};
     var vscode = acquireVsCodeApi();
 
     // node-pty install button
@@ -810,8 +848,10 @@ Ctrl+Wheel to zoom individual cells.`).replace(`
 
     // \u2500\u2500 Settings \u2500\u2500
     var curZoom = 100, curFontFamily = '', curBg = '', curFg = '';
+    var curThemeName = '';
+    var themeNames = [''];
     var activeSettingsTab = 'all';
-    var cellOverrides = {}; // { 0: { bgColor, fgColor, fontFamily }, ... }
+    var cellOverrides = {}; // { 0: { bgColor, fgColor, fontFamily, themeName }, ... }
     var settingsTabsEl = document.getElementById('settingsTabs');
     var builtinFonts = [
       { value: '', label: __i18n.ideDefault },
@@ -829,6 +869,67 @@ Ctrl+Wheel to zoom individual cells.`).replace(`
     ];
     var customFontNames = [];
     var dropdownOpen = false;
+
+    // \u2500\u2500 Theme dropdown \u2500\u2500
+    var themeDisplay = document.getElementById('themeDisplay');
+    var themeDisplayText = document.getElementById('themeDisplayText');
+    var themeDropdownEl = document.getElementById('themeDropdown');
+    var themeDropdownOpen = false;
+
+    function getThemeDisplayName(val) {
+      if (!val) return __i18n.ideDefault;
+      return val;
+    }
+
+    function toggleThemeDropdown(show) {
+      themeDropdownOpen = typeof show === 'boolean' ? show : !themeDropdownOpen;
+      themeDropdownEl.classList.toggle('show', themeDropdownOpen);
+      themeDisplay.classList.toggle('open', themeDropdownOpen);
+    }
+
+    function selectTheme(name) {
+      if (activeSettingsTab === 'all') {
+        curThemeName = name;
+        themeDisplayText.textContent = getThemeDisplayName(name);
+        toggleThemeDropdown(false);
+        vscode.postMessage({ type: 'setConfig', key: 'colorTheme', value: name });
+        cellOverrides = {};
+        vscode.postMessage({ type: 'clearAllCellOverrides' });
+        updateTabOverrideIndicators();
+      } else {
+        var cid = parseInt(activeSettingsTab, 10);
+        if (!cellOverrides[cid]) cellOverrides[cid] = { bgColor: '', fgColor: '', fontFamily: '', themeName: '' };
+        cellOverrides[cid].themeName = name;
+        themeDisplayText.textContent = getThemeDisplayName(name);
+        toggleThemeDropdown(false);
+        vscode.postMessage({ type: 'setCellConfig', cellId: cid, bgColor: cellOverrides[cid].bgColor, fgColor: cellOverrides[cid].fgColor, fontFamily: cellOverrides[cid].fontFamily, themeName: name });
+        updateTabOverrideIndicators();
+      }
+    }
+
+    function buildThemeDropdown() {
+      themeDropdownEl.innerHTML = '';
+      var currentTheme = activeSettingsTab === 'all' ? curThemeName : (cellOverrides[parseInt(activeSettingsTab, 10)] || {}).themeName || curThemeName;
+      for (var i = 0; i < themeNames.length; i++) {
+        (function(name) {
+          var opt = document.createElement('div');
+          opt.className = 'font-opt' + (currentTheme === name ? ' active' : '');
+          var nameEl = document.createElement('span');
+          nameEl.className = 'font-opt-name';
+          nameEl.textContent = name || __i18n.ideDefault;
+          opt.appendChild(nameEl);
+          opt.addEventListener('click', function(e) { e.stopPropagation(); selectTheme(name); });
+          themeDropdownEl.appendChild(opt);
+        })(themeNames[i]);
+      }
+    }
+
+    themeDisplay.addEventListener('click', function(e) {
+      e.stopPropagation();
+      toggleDropdown(false); // close font dropdown
+      buildThemeDropdown();
+      toggleThemeDropdown();
+    });
 
     // \u2500\u2500 Font dropdown \u2500\u2500
     var fontDisplay = document.getElementById('fontDisplay');
@@ -860,11 +961,11 @@ Ctrl+Wheel to zoom individual cells.`).replace(`
         updateTabOverrideIndicators();
       } else {
         var cid = parseInt(activeSettingsTab, 10);
-        if (!cellOverrides[cid]) cellOverrides[cid] = { bgColor: '', fgColor: '', fontFamily: '' };
+        if (!cellOverrides[cid]) cellOverrides[cid] = { bgColor: '', fgColor: '', fontFamily: '', themeName: '' };
         cellOverrides[cid].fontFamily = val;
         fontDisplayText.textContent = getDisplayName(val);
         toggleDropdown(false);
-        vscode.postMessage({ type: 'setCellConfig', cellId: cid, bgColor: cellOverrides[cid].bgColor, fgColor: cellOverrides[cid].fgColor, fontFamily: val });
+        vscode.postMessage({ type: 'setCellConfig', cellId: cid, bgColor: cellOverrides[cid].bgColor, fgColor: cellOverrides[cid].fgColor, fontFamily: val, themeName: cellOverrides[cid].themeName });
         updateTabOverrideIndicators();
       }
     }
@@ -926,10 +1027,11 @@ Ctrl+Wheel to zoom individual cells.`).replace(`
 
     fontDisplay.addEventListener('click', function(e) {
       e.stopPropagation();
+      toggleThemeDropdown(false); // close theme dropdown
       buildDropdown();
       toggleDropdown();
     });
-    document.addEventListener('click', function() { toggleDropdown(false); });
+    document.addEventListener('click', function() { toggleDropdown(false); toggleThemeDropdown(false); });
 
     // \u2500\u2500 Color pickers \u2500\u2500
     function setupColor(prefix, configKey) {
@@ -965,10 +1067,10 @@ Ctrl+Wheel to zoom individual cells.`).replace(`
           updateTabOverrideIndicators();
         } else {
           var cid = parseInt(activeSettingsTab, 10);
-          if (!cellOverrides[cid]) cellOverrides[cid] = { bgColor: '', fgColor: '', fontFamily: '' };
+          if (!cellOverrides[cid]) cellOverrides[cid] = { bgColor: '', fgColor: '', fontFamily: '', themeName: '' };
           cellOverrides[cid][overrideKey] = val;
           updateColorUI(val);
-          vscode.postMessage({ type: 'setCellConfig', cellId: cid, bgColor: cellOverrides[cid].bgColor, fgColor: cellOverrides[cid].fgColor, fontFamily: cellOverrides[cid].fontFamily });
+          vscode.postMessage({ type: 'setCellConfig', cellId: cid, bgColor: cellOverrides[cid].bgColor, fgColor: cellOverrides[cid].fgColor, fontFamily: cellOverrides[cid].fontFamily, themeName: cellOverrides[cid].themeName });
           updateTabOverrideIndicators();
         }
       });
@@ -983,16 +1085,17 @@ Ctrl+Wheel to zoom individual cells.`).replace(`
           updateTabOverrideIndicators();
         } else {
           var cid = parseInt(activeSettingsTab, 10);
-          if (!cellOverrides[cid]) cellOverrides[cid] = { bgColor: '', fgColor: '', fontFamily: '' };
+          if (!cellOverrides[cid]) cellOverrides[cid] = { bgColor: '', fgColor: '', fontFamily: '', themeName: '' };
           cellOverrides[cid][overrideKey] = '';
           updateColorUI('');
-          vscode.postMessage({ type: 'setCellConfig', cellId: cid, bgColor: cellOverrides[cid].bgColor, fgColor: cellOverrides[cid].fgColor, fontFamily: cellOverrides[cid].fontFamily });
+          vscode.postMessage({ type: 'setCellConfig', cellId: cid, bgColor: cellOverrides[cid].bgColor, fgColor: cellOverrides[cid].fgColor, fontFamily: cellOverrides[cid].fontFamily, themeName: cellOverrides[cid].themeName });
           updateTabOverrideIndicators();
         }
       }
       resetBtn.addEventListener('click', doReset);
       valEl.addEventListener('click', function() {
-        if (valEl.textContent === __i18n.ideDefault) return;
+        // In All tab, always allow reset (clears per-cell overrides even if global is already IDE Default)
+        if (valEl.textContent === __i18n.ideDefault && activeSettingsTab !== 'all') return;
         doReset();
       });
       valEl.style.cursor = 'pointer';
@@ -1022,12 +1125,14 @@ Ctrl+Wheel to zoom individual cells.`).replace(`
 
     function showTabValues() {
       if (activeSettingsTab === 'all') {
+        themeDisplayText.textContent = getThemeDisplayName(curThemeName);
         fontDisplayText.textContent = getDisplayName(curFontFamily);
         updateBgUI(curBg);
         updateFgUI(curFg);
       } else {
         var cid = parseInt(activeSettingsTab, 10);
         var ov = cellOverrides[cid] || {};
+        themeDisplayText.textContent = getThemeDisplayName(ov.themeName || curThemeName);
         fontDisplayText.textContent = getDisplayName(ov.fontFamily || curFontFamily);
         updateBgUI(ov.bgColor || curBg);
         updateFgUI(ov.fgColor || curFg);
@@ -1079,7 +1184,7 @@ Ctrl+Wheel to zoom individual cells.`).replace(`
         var tab = btns[i].dataset.tab;
         if (tab === 'all') continue;
         var ov = cellOverrides[parseInt(tab, 10)];
-        var hasOv = ov && (ov.bgColor || ov.fgColor || ov.fontFamily);
+        var hasOv = ov && (ov.bgColor || ov.fgColor || ov.fontFamily || ov.themeName);
         btns[i].classList.toggle('has-override', !!hasOv);
       }
     }
@@ -1243,8 +1348,8 @@ Ctrl+Wheel to zoom individual cells.`).replace(`
           });
           item.appendChild(del);
 
-          item.addEventListener('click', function() {
-            vscode.postMessage({ type: 'openProject', path: p.path });
+          item.addEventListener('click', function(e) {
+            vscode.postMessage({ type: 'openProject', path: p.path, newWindow: e.ctrlKey || e.metaKey });
           });
 
           list.appendChild(item);
@@ -1389,7 +1494,8 @@ Ctrl+Wheel to zoom individual cells.`).replace(`
     });
 
     document.getElementById('broadcastInput').addEventListener('keydown', function(e) {
-      if (e.key === 'Enter') {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
         document.getElementById('broadcastSendBtn').click();
       }
     });
@@ -1416,11 +1522,19 @@ Ctrl+Wheel to zoom individual cells.`).replace(`
           if (btn) { btn.textContent = __i18n.retry; btn.disabled = false; }
         }
       }
+      if (msg.type === 'mcpPort') {
+        var portInfo = document.getElementById('mcpPortInfo');
+        var portValue = document.getElementById('mcpPortValue');
+        if (portInfo) portInfo.style.display = msg.port > 0 ? 'block' : 'none';
+        if (portValue) portValue.textContent = msg.port;
+      }
       if (msg.type === 'configValues') {
         curZoom = msg.zoom;
         curFontFamily = msg.fontFamily;
         curBg = msg.bgColor || '';
         curFg = msg.fgColor || '';
+        curThemeName = msg.colorTheme || '';
+        themeNames = msg.themeNames || [''];
         customFontNames = msg.customFonts || [];
         startupCommands = msg.startupCommands || [];
         projects = msg.projects || [];
@@ -1442,6 +1556,6 @@ Ctrl+Wheel to zoom individual cells.`).replace(`
     vscode.postMessage({ type: 'getConfig' });
   </script>
 </body>
-</html>`}};function K(){let d="",o="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";for(let s=0;s<32;s++)d+=o.charAt(Math.floor(Math.random()*o.length));return d}var R=f(require("http"));var L=class{constructor(o){this._server=null;this._port=o}start(){return new Promise((o,s)=>{this._server=R.createServer((i,e)=>{if(e.setHeader("Content-Type","application/json"),i.method==="OPTIONS"){e.writeHead(204),e.end();return}let t=new URL(i.url||"/",`http://127.0.0.1:${this._port}`);i.method==="GET"&&t.pathname==="/api/health"?(e.writeHead(200),e.end(JSON.stringify({status:"ok"}))):i.method==="GET"&&t.pathname==="/api/info"?this._handleInfo(e):i.method==="POST"&&t.pathname==="/api/send"?this._readBody(i).then(a=>this._handleSend(a,e)):i.method==="POST"&&t.pathname==="/api/read"?this._readBody(i).then(a=>this._handleRead(a,e)):i.method==="POST"&&t.pathname==="/api/broadcast"?this._readBody(i).then(a=>this._handleBroadcast(a,e)):(e.writeHead(404),e.end(JSON.stringify({error:"Not found"})))}),this._server.on("error",s),this._server.listen(this._port,"127.0.0.1",()=>{let i=this._server.address();this._port=i.port,o(this._port)})})}stop(){this._server?.close(),this._server=null}getPort(){return this._port}_handleInfo(o){let s=g.currentPanel;if(!s){o.writeHead(200),o.end(JSON.stringify({grid:null}));return}o.writeHead(200),o.end(JSON.stringify({grid:{rows:s.getRows(),cols:s.getCols(),cellCount:s.getCellCount(),cellLabels:s.getCellLabels()}}))}_handleSend(o,s){let i=g.currentPanel;if(!i){s.writeHead(200),s.end(JSON.stringify({success:!1,error:"No grid open"}));return}let e=typeof o.cellId=="number"?o.cellId:-1,t=typeof o.text=="string"?o.text:"",a=i.sendToCell(e,t);s.writeHead(200),s.end(JSON.stringify({success:a}))}_handleRead(o,s){let i=g.currentPanel;if(!i){s.writeHead(200),s.end(JSON.stringify({output:null,error:"No grid open"}));return}let e=typeof o.cellId=="number"?o.cellId:-1,t=typeof o.lines=="number"?o.lines:void 0,a=i.readCell(e,t);s.writeHead(200),s.end(JSON.stringify({output:a}))}_handleBroadcast(o,s){let i=g.currentPanel;if(!i){s.writeHead(200),s.end(JSON.stringify({success:!1,error:"No grid open"}));return}let e=typeof o.text=="string"?o.text:"",t=i.getCellCount();for(let a=0;a<t;a++)i.sendToCell(a,e);s.writeHead(200),s.end(JSON.stringify({success:!0,cellCount:t}))}_readBody(o){return new Promise(s=>{let i="";o.on("data",e=>{i+=e}),o.on("end",()=>{try{s(JSON.parse(i))}catch{s({})}})})}};var _,h;function Y(d){let o=c.workspace.workspaceFolders?.[0]?.uri.fsPath;if(o){let t=d.globalState.get("projectPresets",{})[o];if(t){let r=d.globalState.get("presets",[]).find(l=>l.name===t);if(r){let l=c.workspace.getConfiguration("terminalGrid");l.update("defaultRows",r.rows,c.ConfigurationTarget.Global),l.update("defaultCols",r.cols,c.ConfigurationTarget.Global),l.update("zoomPercent",r.zoomPercent,c.ConfigurationTarget.Global),l.update("fontFamily",r.fontFamily,c.ConfigurationTarget.Global),l.update("backgroundColor",r.bgColor,c.ConfigurationTarget.Global),l.update("foregroundColor",r.fgColor,c.ConfigurationTarget.Global),d.globalState.update("startupCommands",r.startupCommands||[]),d.globalState.update("cellLabels",r.cellLabels||[])}}}let s=c.workspace.getConfiguration("terminalGrid").get("apiPort",7890);s>0&&(_=new L(s),_.start().then(e=>{h=c.window.createStatusBarItem(c.StatusBarAlignment.Right,50),h.text=`$(broadcast) TG :${e}`,h.tooltip=c.l10n.t("Terminal Grid API active on port {0}",e),h.command="terminalGrid.copyMcpConfig",h.show(),d.subscriptions.push(h)}).catch(e=>{c.window.showWarningMessage(c.l10n.t("Terminal Grid API bridge failed to start: {0}",e.message))}));let i=new k(d);d.subscriptions.push(c.window.registerWebviewViewProvider(k.viewType,i)),d.subscriptions.push(c.commands.registerCommand("terminalGrid._refreshSidebar",()=>{i.sendConfig()})),d.subscriptions.push(c.window.registerWebviewPanelSerializer("terminalGrid",{async deserializeWebviewPanel(e,t){let a=d.globalState.get("lastGrid");a?g.revive(e,d,a.rows,a.cols):e.dispose()}})),d.subscriptions.push(c.commands.registerCommand("terminalGrid.openGrid",()=>{let e=c.workspace.getConfiguration("terminalGrid"),t=e.get("defaultRows",2),a=e.get("defaultCols",3);g.createOrShow(d,t,a)}),c.commands.registerCommand("terminalGrid.openCustomGrid",(e,t)=>{g.createOrShow(d,e,t)}),c.commands.registerCommand("terminalGrid.open2x2",()=>g.createOrShow(d,2,2)),c.commands.registerCommand("terminalGrid.open2x3",()=>g.createOrShow(d,2,3)),c.commands.registerCommand("terminalGrid.open3x3",()=>g.createOrShow(d,3,3)),c.commands.registerCommand("terminalGrid.sendToCell",(e,t)=>g.currentPanel?.sendToCell(e,t)??!1),c.commands.registerCommand("terminalGrid.readCell",(e,t)=>g.currentPanel?.readCell(e,t)??null),c.commands.registerCommand("terminalGrid.getGridInfo",()=>{let e=g.currentPanel;return e?{rows:e.getRows(),cols:e.getCols(),cellCount:e.getCellCount(),cellLabels:e.getCellLabels()}:null}),c.commands.registerCommand("terminalGrid.testAPI",async()=>{let e=c.window.createOutputChannel("Terminal Grid Tests");e.show(),e.appendLine(`=== Terminal Grid API Tests ===
-`);let t=0,a=0;function r(w,y,P){let z=y?"PASS":"FAIL";y?t++:a++,e.appendLine(`[${z}] ${w}${P?" \u2014 "+P:""}`)}let l=await c.commands.executeCommand("terminalGrid.getGridInfo");if(!l){e.appendLine("[FAIL] getGridInfo returned null. Open a grid first.");return}r("getGridInfo returns object",!!l,JSON.stringify(l)),r("rows is number",typeof l.rows=="number",`rows=${l.rows}`),r("cols is number",typeof l.cols=="number",`cols=${l.cols}`),r("cellCount = rows*cols",l.cellCount===l.rows*l.cols,`${l.cellCount}`),r("cellLabels is array",Array.isArray(l.cellLabels),`length=${l.cellLabels.length}`),r("cellLabels.length = cellCount",l.cellLabels.length===l.cellCount);let p=await c.commands.executeCommand("terminalGrid.sendToCell",0,"echo __API_TEST__\r");r("sendToCell(0) returns true",p===!0);let m=await c.commands.executeCommand("terminalGrid.sendToCell",999,"x\r");r("sendToCell(999) returns false",m===!1,`got ${m}`);let b=await c.commands.executeCommand("terminalGrid.sendToCell",0,"TYPED_ONLY");r("sendToCell without \\r returns true",b===!0),await new Promise(w=>setTimeout(w,2e3)),await c.commands.executeCommand("terminalGrid.sendToCell",0,"");let v=await c.commands.executeCommand("terminalGrid.readCell",0);r("readCell(0) returns string",typeof v=="string",`length=${v?.length??0}`),r("readCell(0) contains test marker",!!v&&v.includes("__API_TEST__"));let S=await c.commands.executeCommand("terminalGrid.readCell",0,3);r("readCell(0, 3) returns string",typeof S=="string");let x=await c.commands.executeCommand("terminalGrid.readCell",0,0);r("readCell(0, 0) returns empty",x==="",`got "${x}"`);let B=await c.commands.executeCommand("terminalGrid.readCell",999);if(r("readCell(999) returns null",B===null,`got ${B}`),l.cellCount>1){let w=await c.commands.executeCommand("terminalGrid.sendToCell",1,"echo CELL1_OK\r");r("sendToCell(1) returns true",w===!0),await new Promise(P=>setTimeout(P,1500));let y=await c.commands.executeCommand("terminalGrid.readCell",1);r("readCell(1) contains CELL1_OK",!!y&&y.includes("CELL1_OK"))}e.appendLine(`
-=== ${t} passed, ${a} failed ===`),a===0?c.window.showInformationMessage(c.l10n.t("Terminal Grid API: All {0} tests passed!",t)):c.window.showWarningMessage(c.l10n.t("Terminal Grid API: {0} test(s) failed. See output.",a))}),c.commands.registerCommand("terminalGrid.copyMcpConfig",()=>{let e=_?.getPort()??7890,a={mcpServers:{"terminal-grid":{command:"node",args:[G.join(d.extensionPath,"mcp-server.js")],env:{TERMINAL_GRID_PORT:String(e)}}}};c.env.clipboard.writeText(JSON.stringify(a,null,2)),c.window.showInformationMessage(c.l10n.t("Terminal Grid MCP config copied to clipboard (port {0})",e))}))}function q(){_?.stop(),_=void 0,g.currentPanel?.dispose()}0&&(module.exports={activate,deactivate});
+</html>`}};function X(){let c="",e="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";for(let n=0;n<32;n++)c+=e.charAt(Math.floor(Math.random()*e.length));return c}var j=v(require("http"));var B=class{constructor(e){this._server=null;this._port=e}start(e=10){return new Promise((n,l)=>{this._server=this._createServer();let t=o=>{this._server.removeAllListeners("error"),this._server.on("error",s=>{s.code==="EADDRINUSE"&&o<e?(this._port++,t(o+1)):l(s)}),this._server.listen(this._port,"127.0.0.1",()=>{let s=this._server.address();this._port=s.port,n(this._port)})};t(0)})}_createServer(){return j.createServer((e,n)=>{if(n.setHeader("Content-Type","application/json"),e.method==="OPTIONS"){n.writeHead(204),n.end();return}let l=new URL(e.url||"/",`http://127.0.0.1:${this._port}`);e.method==="GET"&&l.pathname==="/api/health"?(n.writeHead(200),n.end(JSON.stringify({status:"ok"}))):e.method==="GET"&&l.pathname==="/api/info"?this._handleInfo(n):e.method==="POST"&&l.pathname==="/api/send"?this._readBody(e).then(t=>this._handleSend(t,n)):e.method==="POST"&&l.pathname==="/api/read"?this._readBody(e).then(t=>this._handleRead(t,n)):e.method==="POST"&&l.pathname==="/api/broadcast"?this._readBody(e).then(t=>this._handleBroadcast(t,n)):(n.writeHead(404),n.end(JSON.stringify({error:"Not found"})))})}stop(){this._server?.close(),this._server=null}getPort(){return this._port}_handleInfo(e){let n=u.currentPanel;if(!n){e.writeHead(200),e.end(JSON.stringify({grid:null}));return}e.writeHead(200),e.end(JSON.stringify({grid:{rows:n.getRows(),cols:n.getCols(),cellCount:n.getCellCount(),cellLabels:n.getCellLabels()}}))}_handleSend(e,n){let l=u.currentPanel;if(!l){n.writeHead(200),n.end(JSON.stringify({success:!1,error:"No grid open"}));return}let t=typeof e.cellId=="number"?e.cellId:-1,o=typeof e.text=="string"?e.text:"",s=l.sendToCell(t,o);n.writeHead(200),n.end(JSON.stringify({success:s}))}_handleRead(e,n){let l=u.currentPanel;if(!l){n.writeHead(200),n.end(JSON.stringify({output:null,error:"No grid open"}));return}let t=typeof e.cellId=="number"?e.cellId:-1,o=typeof e.lines=="number"?e.lines:void 0,s=l.readCell(t,o);n.writeHead(200),n.end(JSON.stringify({output:s}))}_handleBroadcast(e,n){let l=u.currentPanel;if(!l){n.writeHead(200),n.end(JSON.stringify({success:!1,error:"No grid open"}));return}let t=typeof e.text=="string"?e.text:"",o=l.getCellCount();for(let s=0;s<o;s++)l.sendToCell(s,t);n.writeHead(200),n.end(JSON.stringify({success:!0,cellCount:o}))}_readBody(e){return new Promise(n=>{let l="";e.on("data",t=>{l+=t}),e.on("end",()=>{try{n(JSON.parse(l))}catch{n({})}})})}};var S,x;function Q(c){let e=d.workspace.workspaceFolders?.[0]?.uri.fsPath;if(e){let o=c.globalState.get("projectPresets",{})[e];if(o){let r=c.globalState.get("presets",[]).find(i=>i.name===o);if(r){let i=d.workspace.getConfiguration("terminalGrid");i.update("defaultRows",r.rows,d.ConfigurationTarget.Global),i.update("defaultCols",r.cols,d.ConfigurationTarget.Global),i.update("zoomPercent",r.zoomPercent,d.ConfigurationTarget.Global),i.update("fontFamily",r.fontFamily,d.ConfigurationTarget.Global),i.update("backgroundColor",r.bgColor,d.ConfigurationTarget.Global),i.update("foregroundColor",r.fgColor,d.ConfigurationTarget.Global),i.update("colorTheme",r.colorTheme||"",d.ConfigurationTarget.Global),c.globalState.update("startupCommands",r.startupCommands||[]),c.globalState.update("cellLabels",r.cellLabels||[])}}}let n=new _(c),l=d.workspace.getConfiguration("terminalGrid").get("apiPort",7890);l>0&&(S=new B(l),S.start().then(t=>{x=d.window.createStatusBarItem(d.StatusBarAlignment.Right,50),x.text=`$(broadcast) TG :${t}`,x.tooltip=d.l10n.t("Terminal Grid API active on port {0}",t),x.command="terminalGrid.copyMcpConfig",x.show(),c.subscriptions.push(x),n.setMcpPort(t)}).catch(t=>{d.window.showWarningMessage(d.l10n.t("Terminal Grid API bridge failed to start: {0}",t.message))})),c.subscriptions.push(d.window.registerWebviewViewProvider(_.viewType,n)),c.subscriptions.push(d.commands.registerCommand("terminalGrid._refreshSidebar",()=>{n.sendConfig()})),c.subscriptions.push(d.window.registerWebviewPanelSerializer("terminalGrid",{async deserializeWebviewPanel(t,o){let s=c.globalState.get("lastGrid");s?u.revive(t,c,s.rows,s.cols):t.dispose()}})),c.subscriptions.push(d.commands.registerCommand("terminalGrid.openGrid",()=>{let t=d.workspace.getConfiguration("terminalGrid"),o=t.get("defaultRows",2),s=t.get("defaultCols",3);u.createOrShow(c,o,s)}),d.commands.registerCommand("terminalGrid.openCustomGrid",(t,o)=>{u.createOrShow(c,t,o)}),d.commands.registerCommand("terminalGrid.open2x2",()=>u.createOrShow(c,2,2)),d.commands.registerCommand("terminalGrid.open2x3",()=>u.createOrShow(c,2,3)),d.commands.registerCommand("terminalGrid.open3x3",()=>u.createOrShow(c,3,3)),d.commands.registerCommand("terminalGrid.sendToCell",(t,o)=>u.currentPanel?.sendToCell(t,o)??!1),d.commands.registerCommand("terminalGrid.readCell",(t,o)=>u.currentPanel?.readCell(t,o)??null),d.commands.registerCommand("terminalGrid.getGridInfo",()=>{let t=u.currentPanel;return t?{rows:t.getRows(),cols:t.getCols(),cellCount:t.getCellCount(),cellLabels:t.getCellLabels()}:null}),d.commands.registerCommand("terminalGrid.testAPI",async()=>{let t=d.window.createOutputChannel("Terminal Grid Tests");t.show(),t.appendLine(`=== Terminal Grid API Tests ===
+`);let o=0,s=0;function r(y,C,T){let $=C?"PASS":"FAIL";C?o++:s++,t.appendLine(`[${$}] ${y}${T?" \u2014 "+T:""}`)}let i=await d.commands.executeCommand("terminalGrid.getGridInfo");if(!i){t.appendLine("[FAIL] getGridInfo returned null. Open a grid first.");return}r("getGridInfo returns object",!!i,JSON.stringify(i)),r("rows is number",typeof i.rows=="number",`rows=${i.rows}`),r("cols is number",typeof i.cols=="number",`cols=${i.cols}`),r("cellCount = rows*cols",i.cellCount===i.rows*i.cols,`${i.cellCount}`),r("cellLabels is array",Array.isArray(i.cellLabels),`length=${i.cellLabels.length}`),r("cellLabels.length = cellCount",i.cellLabels.length===i.cellCount);let p=await d.commands.executeCommand("terminalGrid.sendToCell",0,"echo __API_TEST__\r");r("sendToCell(0) returns true",p===!0);let m=await d.commands.executeCommand("terminalGrid.sendToCell",999,"x\r");r("sendToCell(999) returns false",m===!1,`got ${m}`);let f=await d.commands.executeCommand("terminalGrid.sendToCell",0,"TYPED_ONLY");r("sendToCell without \\r returns true",f===!0),await new Promise(y=>setTimeout(y,2e3)),await d.commands.executeCommand("terminalGrid.sendToCell",0,"");let b=await d.commands.executeCommand("terminalGrid.readCell",0);r("readCell(0) returns string",typeof b=="string",`length=${b?.length??0}`),r("readCell(0) contains test marker",!!b&&b.includes("__API_TEST__"));let E=await d.commands.executeCommand("terminalGrid.readCell",0,3);r("readCell(0, 3) returns string",typeof E=="string");let h=await d.commands.executeCommand("terminalGrid.readCell",0,0);r("readCell(0, 0) returns empty",h==="",`got "${h}"`);let F=await d.commands.executeCommand("terminalGrid.readCell",999);if(r("readCell(999) returns null",F===null,`got ${F}`),i.cellCount>1){let y=await d.commands.executeCommand("terminalGrid.sendToCell",1,"echo CELL1_OK\r");r("sendToCell(1) returns true",y===!0),await new Promise(T=>setTimeout(T,1500));let C=await d.commands.executeCommand("terminalGrid.readCell",1);r("readCell(1) contains CELL1_OK",!!C&&C.includes("CELL1_OK"))}t.appendLine(`
+=== ${o} passed, ${s} failed ===`),s===0?d.window.showInformationMessage(d.l10n.t("Terminal Grid API: All {0} tests passed!",o)):d.window.showWarningMessage(d.l10n.t("Terminal Grid API: {0} test(s) failed. See output.",s))}),d.commands.registerCommand("terminalGrid.copyMcpConfig",()=>{let t=S?.getPort()??7890,s={mcpServers:{"terminal-grid":{command:"node",args:[G.join(c.extensionPath,"mcp-server.js")],env:{TERMINAL_GRID_PORT:String(t)}}}};d.env.clipboard.writeText(JSON.stringify(s,null,2)),d.window.showInformationMessage(d.l10n.t("Terminal Grid MCP config copied to clipboard (port {0})",t))}))}function ee(){S?.stop(),S=void 0,u.currentPanel?.dispose()}0&&(module.exports={activate,deactivate});

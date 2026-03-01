@@ -3,6 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as cp from "child_process";
 import { TerminalGridPanel } from "./TerminalGridPanel";
+import { THEME_NAMES, resolveThemeColors } from "./themes";
 
 interface CustomFont {
   name: string;
@@ -19,9 +20,15 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = "terminalGrid.sidebarView";
   private _view?: vscode.WebviewView;
   private readonly _context: vscode.ExtensionContext;
+  private _mcpPort = 0;
 
   constructor(context: vscode.ExtensionContext) {
     this._context = context;
+  }
+
+  public setMcpPort(port: number): void {
+    this._mcpPort = port;
+    this._view?.webview.postMessage({ type: "mcpPort", port });
   }
 
   resolveWebviewView(
@@ -151,7 +158,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         }
         case "openProject": {
           const uri = vscode.Uri.file(msg.path);
-          await vscode.commands.executeCommand("vscode.openFolder", uri);
+          await vscode.commands.executeCommand("vscode.openFolder", uri, { forceNewWindow: !!msg.newWindow });
           break;
         }
         case "addCurrentProject": {
@@ -200,6 +207,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
             startupCommands: {command: string; count: number}[];
             cellLabels: string[]; zoomPercent: number;
             fontFamily: string; bgColor: string; fgColor: string;
+            colorTheme?: string;
           } | undefined;
           if (!preset) break;
           const cfg = vscode.workspace.getConfiguration("terminalGrid");
@@ -209,6 +217,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
           await cfg.update("fontFamily", preset.fontFamily, vscode.ConfigurationTarget.Global);
           await cfg.update("backgroundColor", preset.bgColor, vscode.ConfigurationTarget.Global);
           await cfg.update("foregroundColor", preset.fgColor, vscode.ConfigurationTarget.Global);
+          await cfg.update("colorTheme", preset.colorTheme || "", vscode.ConfigurationTarget.Global);
           await this._context.globalState.update("startupCommands", preset.startupCommands || []);
           await this._context.globalState.update("cellLabels", preset.cellLabels || []);
           // Auto-open grid with loaded preset dimensions
@@ -254,7 +263,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         case "broadcastToCell": {
           if (TerminalGridPanel.currentPanel) {
             for (const id of msg.cellIds as number[]) {
-              TerminalGridPanel.currentPanel.sendToCell(id, msg.text + "\r");
+              TerminalGridPanel.currentPanel.sendInputToCell(id, msg.text);
             }
           } else {
             vscode.window.showWarningMessage(vscode.l10n.t("No terminal grid is open."));
@@ -263,11 +272,12 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         }
         // ── Per-cell config ──
         case "setCellConfig": {
-          const overrides = this._context.globalState.get<Record<number, {bgColor?: string; fgColor?: string; fontFamily?: string}>>("cellOverrides", {});
-          overrides[msg.cellId] = { bgColor: msg.bgColor || "", fgColor: msg.fgColor || "", fontFamily: msg.fontFamily || "" };
+          const overrides = this._context.globalState.get<Record<number, {bgColor?: string; fgColor?: string; fontFamily?: string; themeName?: string}>>("cellOverrides", {});
+          overrides[msg.cellId] = { bgColor: msg.bgColor || "", fgColor: msg.fgColor || "", fontFamily: msg.fontFamily || "", themeName: msg.themeName || "" };
           await this._context.globalState.update("cellOverrides", overrides);
           if (TerminalGridPanel.currentPanel) {
-            TerminalGridPanel.currentPanel.sendCellConfig(msg.cellId, msg.bgColor || "", msg.fgColor || "", msg.fontFamily || "");
+            const tc = msg.themeName ? resolveThemeColors(msg.themeName) : null;
+            TerminalGridPanel.currentPanel.sendCellConfig(msg.cellId, msg.bgColor || "", msg.fgColor || "", msg.fontFamily || "", msg.themeName || "", tc);
           }
           break;
         }
@@ -336,6 +346,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       fontFamily: cfg.get<string>("fontFamily", ""),
       bgColor: cfg.get<string>("backgroundColor", ""),
       fgColor: cfg.get<string>("foregroundColor", ""),
+      colorTheme: cfg.get<string>("colorTheme", ""),
     };
     const presets = this._context.globalState.get<Record<string, unknown>[]>("presets", []);
     const existIdx = presets.findIndex((p) => (p as {name: string}).name === name);
@@ -366,6 +377,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       fontFamily: cfg.get<string>("fontFamily", ""),
       bgColor: cfg.get<string>("backgroundColor", ""),
       fgColor: cfg.get<string>("foregroundColor", ""),
+      colorTheme: cfg.get<string>("colorTheme", ""),
+      themeNames: THEME_NAMES,
       customFonts: customFonts.map((f) => f.name),
       startupCommands: startupCommands,
       projects: projects,
@@ -758,12 +771,15 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         <span class="tip-wrap">
           <span class="tip-icon">?</span>
           <div class="tip-bubble">
-            ${vscode.l10n.t("Register projects and click to switch folders. If a preset is linked, it will be auto-applied on switch.")}
+            ${vscode.l10n.t("Register projects and click to switch folders. Ctrl+Click to open in a new window. If a preset is linked, it will be auto-applied on switch.")}
           </div>
         </span>
         <span class="collapse-icon">\u25BE</span>
       </div>
       <div class="section-body">
+        <div id="mcpPortInfo" style="font-size: 11px; opacity: 0.7; margin-bottom: 8px; display: ${this._mcpPort > 0 ? 'block' : 'none'};">
+          MCP Port: <span id="mcpPortValue">${this._mcpPort}</span>
+        </div>
         <div id="projectList" class="cmd-list"></div>
         <div class="btn-group" style="gap: 6px;">
           <button class="glass-btn" id="addCurrentProjectBtn" style="font-size: 11px; padding: 8px 10px;">
@@ -820,6 +836,17 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         </div>
 
         <div id="settingsTabs" class="settings-tabs hidden"></div>
+
+        <div class="setting-row">
+          <span class="setting-label">${vscode.l10n.t("Theme")}</span>
+          <div class="font-picker" id="themePicker">
+            <div class="font-display" id="themeDisplay">
+              <span class="font-display-text" id="themeDisplayText">${vscode.l10n.t("IDE Default")}</span>
+              <span class="font-display-arrow">\u25B2</span>
+            </div>
+            <div class="font-dropdown" id="themeDropdown"></div>
+          </div>
+        </div>
 
         <div class="setting-row">
           <span class="setting-label">${vscode.l10n.t("Font")}</span>
@@ -943,9 +970,11 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       </div>
       <div class="section-body">
         <div id="broadcastTargets" class="broadcast-targets hidden"></div>
-        <div class="cmd-add-row">
-          <input class="glass-input" id="broadcastInput" placeholder="${vscode.l10n.t("Type command…")}" style="flex: 1;" />
-          <button class="stepper-btn" id="broadcastSendBtn" title="${vscode.l10n.t("Send")}" style="width: 50px;">${vscode.l10n.t("Send")}</button>
+        <div class="cmd-add-row" style="flex-direction: column; gap: 4px;">
+          <textarea class="glass-input" id="broadcastInput" placeholder="${vscode.l10n.t("Type command…")}" rows="3" style="width: 100%; resize: vertical; font-family: var(--vscode-editor-fontFamily, monospace); font-size: 12px; line-height: 1.4;"></textarea>
+          <div style="display: flex; justify-content: flex-end;">
+            <button class="stepper-btn" id="broadcastSendBtn" title="${vscode.l10n.t("Send")}" style="width: 50px;">${vscode.l10n.t("Send")}</button>
+          </div>
         </div>
       </div>
     </div>
@@ -985,6 +1014,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       retry: vscode.l10n.t("Retry"),
       ptyInstalled: vscode.l10n.t("node-pty installed successfully!"),
       ptyInstalledHint: vscode.l10n.t("Reload the window to activate."),
+      theme: vscode.l10n.t("Theme"),
     })};
     var vscode = acquireVsCodeApi();
 
@@ -1082,8 +1112,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 
     // ── Settings ──
     var curZoom = 100, curFontFamily = '', curBg = '', curFg = '';
+    var curThemeName = '';
+    var themeNames = [''];
     var activeSettingsTab = 'all';
-    var cellOverrides = {}; // { 0: { bgColor, fgColor, fontFamily }, ... }
+    var cellOverrides = {}; // { 0: { bgColor, fgColor, fontFamily, themeName }, ... }
     var settingsTabsEl = document.getElementById('settingsTabs');
     var builtinFonts = [
       { value: '', label: __i18n.ideDefault },
@@ -1101,6 +1133,67 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     ];
     var customFontNames = [];
     var dropdownOpen = false;
+
+    // ── Theme dropdown ──
+    var themeDisplay = document.getElementById('themeDisplay');
+    var themeDisplayText = document.getElementById('themeDisplayText');
+    var themeDropdownEl = document.getElementById('themeDropdown');
+    var themeDropdownOpen = false;
+
+    function getThemeDisplayName(val) {
+      if (!val) return __i18n.ideDefault;
+      return val;
+    }
+
+    function toggleThemeDropdown(show) {
+      themeDropdownOpen = typeof show === 'boolean' ? show : !themeDropdownOpen;
+      themeDropdownEl.classList.toggle('show', themeDropdownOpen);
+      themeDisplay.classList.toggle('open', themeDropdownOpen);
+    }
+
+    function selectTheme(name) {
+      if (activeSettingsTab === 'all') {
+        curThemeName = name;
+        themeDisplayText.textContent = getThemeDisplayName(name);
+        toggleThemeDropdown(false);
+        vscode.postMessage({ type: 'setConfig', key: 'colorTheme', value: name });
+        cellOverrides = {};
+        vscode.postMessage({ type: 'clearAllCellOverrides' });
+        updateTabOverrideIndicators();
+      } else {
+        var cid = parseInt(activeSettingsTab, 10);
+        if (!cellOverrides[cid]) cellOverrides[cid] = { bgColor: '', fgColor: '', fontFamily: '', themeName: '' };
+        cellOverrides[cid].themeName = name;
+        themeDisplayText.textContent = getThemeDisplayName(name);
+        toggleThemeDropdown(false);
+        vscode.postMessage({ type: 'setCellConfig', cellId: cid, bgColor: cellOverrides[cid].bgColor, fgColor: cellOverrides[cid].fgColor, fontFamily: cellOverrides[cid].fontFamily, themeName: name });
+        updateTabOverrideIndicators();
+      }
+    }
+
+    function buildThemeDropdown() {
+      themeDropdownEl.innerHTML = '';
+      var currentTheme = activeSettingsTab === 'all' ? curThemeName : (cellOverrides[parseInt(activeSettingsTab, 10)] || {}).themeName || curThemeName;
+      for (var i = 0; i < themeNames.length; i++) {
+        (function(name) {
+          var opt = document.createElement('div');
+          opt.className = 'font-opt' + (currentTheme === name ? ' active' : '');
+          var nameEl = document.createElement('span');
+          nameEl.className = 'font-opt-name';
+          nameEl.textContent = name || __i18n.ideDefault;
+          opt.appendChild(nameEl);
+          opt.addEventListener('click', function(e) { e.stopPropagation(); selectTheme(name); });
+          themeDropdownEl.appendChild(opt);
+        })(themeNames[i]);
+      }
+    }
+
+    themeDisplay.addEventListener('click', function(e) {
+      e.stopPropagation();
+      toggleDropdown(false); // close font dropdown
+      buildThemeDropdown();
+      toggleThemeDropdown();
+    });
 
     // ── Font dropdown ──
     var fontDisplay = document.getElementById('fontDisplay');
@@ -1132,11 +1225,11 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         updateTabOverrideIndicators();
       } else {
         var cid = parseInt(activeSettingsTab, 10);
-        if (!cellOverrides[cid]) cellOverrides[cid] = { bgColor: '', fgColor: '', fontFamily: '' };
+        if (!cellOverrides[cid]) cellOverrides[cid] = { bgColor: '', fgColor: '', fontFamily: '', themeName: '' };
         cellOverrides[cid].fontFamily = val;
         fontDisplayText.textContent = getDisplayName(val);
         toggleDropdown(false);
-        vscode.postMessage({ type: 'setCellConfig', cellId: cid, bgColor: cellOverrides[cid].bgColor, fgColor: cellOverrides[cid].fgColor, fontFamily: val });
+        vscode.postMessage({ type: 'setCellConfig', cellId: cid, bgColor: cellOverrides[cid].bgColor, fgColor: cellOverrides[cid].fgColor, fontFamily: val, themeName: cellOverrides[cid].themeName });
         updateTabOverrideIndicators();
       }
     }
@@ -1198,10 +1291,11 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 
     fontDisplay.addEventListener('click', function(e) {
       e.stopPropagation();
+      toggleThemeDropdown(false); // close theme dropdown
       buildDropdown();
       toggleDropdown();
     });
-    document.addEventListener('click', function() { toggleDropdown(false); });
+    document.addEventListener('click', function() { toggleDropdown(false); toggleThemeDropdown(false); });
 
     // ── Color pickers ──
     function setupColor(prefix, configKey) {
@@ -1237,10 +1331,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
           updateTabOverrideIndicators();
         } else {
           var cid = parseInt(activeSettingsTab, 10);
-          if (!cellOverrides[cid]) cellOverrides[cid] = { bgColor: '', fgColor: '', fontFamily: '' };
+          if (!cellOverrides[cid]) cellOverrides[cid] = { bgColor: '', fgColor: '', fontFamily: '', themeName: '' };
           cellOverrides[cid][overrideKey] = val;
           updateColorUI(val);
-          vscode.postMessage({ type: 'setCellConfig', cellId: cid, bgColor: cellOverrides[cid].bgColor, fgColor: cellOverrides[cid].fgColor, fontFamily: cellOverrides[cid].fontFamily });
+          vscode.postMessage({ type: 'setCellConfig', cellId: cid, bgColor: cellOverrides[cid].bgColor, fgColor: cellOverrides[cid].fgColor, fontFamily: cellOverrides[cid].fontFamily, themeName: cellOverrides[cid].themeName });
           updateTabOverrideIndicators();
         }
       });
@@ -1255,16 +1349,17 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
           updateTabOverrideIndicators();
         } else {
           var cid = parseInt(activeSettingsTab, 10);
-          if (!cellOverrides[cid]) cellOverrides[cid] = { bgColor: '', fgColor: '', fontFamily: '' };
+          if (!cellOverrides[cid]) cellOverrides[cid] = { bgColor: '', fgColor: '', fontFamily: '', themeName: '' };
           cellOverrides[cid][overrideKey] = '';
           updateColorUI('');
-          vscode.postMessage({ type: 'setCellConfig', cellId: cid, bgColor: cellOverrides[cid].bgColor, fgColor: cellOverrides[cid].fgColor, fontFamily: cellOverrides[cid].fontFamily });
+          vscode.postMessage({ type: 'setCellConfig', cellId: cid, bgColor: cellOverrides[cid].bgColor, fgColor: cellOverrides[cid].fgColor, fontFamily: cellOverrides[cid].fontFamily, themeName: cellOverrides[cid].themeName });
           updateTabOverrideIndicators();
         }
       }
       resetBtn.addEventListener('click', doReset);
       valEl.addEventListener('click', function() {
-        if (valEl.textContent === __i18n.ideDefault) return;
+        // In All tab, always allow reset (clears per-cell overrides even if global is already IDE Default)
+        if (valEl.textContent === __i18n.ideDefault && activeSettingsTab !== 'all') return;
         doReset();
       });
       valEl.style.cursor = 'pointer';
@@ -1294,12 +1389,14 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 
     function showTabValues() {
       if (activeSettingsTab === 'all') {
+        themeDisplayText.textContent = getThemeDisplayName(curThemeName);
         fontDisplayText.textContent = getDisplayName(curFontFamily);
         updateBgUI(curBg);
         updateFgUI(curFg);
       } else {
         var cid = parseInt(activeSettingsTab, 10);
         var ov = cellOverrides[cid] || {};
+        themeDisplayText.textContent = getThemeDisplayName(ov.themeName || curThemeName);
         fontDisplayText.textContent = getDisplayName(ov.fontFamily || curFontFamily);
         updateBgUI(ov.bgColor || curBg);
         updateFgUI(ov.fgColor || curFg);
@@ -1351,7 +1448,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         var tab = btns[i].dataset.tab;
         if (tab === 'all') continue;
         var ov = cellOverrides[parseInt(tab, 10)];
-        var hasOv = ov && (ov.bgColor || ov.fgColor || ov.fontFamily);
+        var hasOv = ov && (ov.bgColor || ov.fgColor || ov.fontFamily || ov.themeName);
         btns[i].classList.toggle('has-override', !!hasOv);
       }
     }
@@ -1515,8 +1612,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
           });
           item.appendChild(del);
 
-          item.addEventListener('click', function() {
-            vscode.postMessage({ type: 'openProject', path: p.path });
+          item.addEventListener('click', function(e) {
+            vscode.postMessage({ type: 'openProject', path: p.path, newWindow: e.ctrlKey || e.metaKey });
           });
 
           list.appendChild(item);
@@ -1661,7 +1758,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     });
 
     document.getElementById('broadcastInput').addEventListener('keydown', function(e) {
-      if (e.key === 'Enter') {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
         document.getElementById('broadcastSendBtn').click();
       }
     });
@@ -1688,11 +1786,19 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
           if (btn) { btn.textContent = __i18n.retry; btn.disabled = false; }
         }
       }
+      if (msg.type === 'mcpPort') {
+        var portInfo = document.getElementById('mcpPortInfo');
+        var portValue = document.getElementById('mcpPortValue');
+        if (portInfo) portInfo.style.display = msg.port > 0 ? 'block' : 'none';
+        if (portValue) portValue.textContent = msg.port;
+      }
       if (msg.type === 'configValues') {
         curZoom = msg.zoom;
         curFontFamily = msg.fontFamily;
         curBg = msg.bgColor || '';
         curFg = msg.fgColor || '';
+        curThemeName = msg.colorTheme || '';
+        themeNames = msg.themeNames || [''];
         customFontNames = msg.customFonts || [];
         startupCommands = msg.startupCommands || [];
         projects = msg.projects || [];

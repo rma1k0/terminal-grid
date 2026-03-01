@@ -20,5 +20,6 @@
   "config.fontFamily": "ターミナルフォント上書き（空 = IDE テーマに従う）",
   "config.backgroundColor": "ターミナル背景色上書き（空 = IDE テーマに従う）",
   "config.foregroundColor": "ターミナル前景色上書き（空 = IDE テーマに従う）",
+  "config.colorTheme": "ターミナルカラーテーマ（空 = IDE テーマに従う）",
   "config.apiPort": "MCP ブリッジ HTTP ポート（0 = 無効）。再起動が必要。"
 }

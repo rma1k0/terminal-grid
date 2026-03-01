@@ -9,42 +9,58 @@ export class McpBridge {
     this._port = port;
   }
 
-  start(): Promise<number> {
+  start(retries = 10): Promise<number> {
     return new Promise((resolve, reject) => {
-      this._server = http.createServer((req, res) => {
-        res.setHeader("Content-Type", "application/json");
+      this._server = this._createServer();
 
-        if (req.method === "OPTIONS") {
-          res.writeHead(204);
-          res.end();
-          return;
-        }
+      const tryListen = (attempt: number): void => {
+        this._server!.removeAllListeners("error");
+        this._server!.on("error", (err: NodeJS.ErrnoException) => {
+          if (err.code === "EADDRINUSE" && attempt < retries) {
+            this._port++;
+            tryListen(attempt + 1);
+          } else {
+            reject(err);
+          }
+        });
+        this._server!.listen(this._port, "127.0.0.1", () => {
+          const addr = this._server!.address() as { port: number };
+          this._port = addr.port;
+          resolve(this._port);
+        });
+      };
 
-        const url = new URL(req.url || "/", `http://127.0.0.1:${this._port}`);
+      tryListen(0);
+    });
+  }
 
-        if (req.method === "GET" && url.pathname === "/api/health") {
-          res.writeHead(200);
-          res.end(JSON.stringify({ status: "ok" }));
-        } else if (req.method === "GET" && url.pathname === "/api/info") {
-          this._handleInfo(res);
-        } else if (req.method === "POST" && url.pathname === "/api/send") {
-          this._readBody(req).then((body) => this._handleSend(body, res));
-        } else if (req.method === "POST" && url.pathname === "/api/read") {
-          this._readBody(req).then((body) => this._handleRead(body, res));
-        } else if (req.method === "POST" && url.pathname === "/api/broadcast") {
-          this._readBody(req).then((body) => this._handleBroadcast(body, res));
-        } else {
-          res.writeHead(404);
-          res.end(JSON.stringify({ error: "Not found" }));
-        }
-      });
+  private _createServer(): http.Server {
+    return http.createServer((req, res) => {
+      res.setHeader("Content-Type", "application/json");
 
-      this._server.on("error", reject);
-      this._server.listen(this._port, "127.0.0.1", () => {
-        const addr = this._server!.address() as { port: number };
-        this._port = addr.port;
-        resolve(this._port);
-      });
+      if (req.method === "OPTIONS") {
+        res.writeHead(204);
+        res.end();
+        return;
+      }
+
+      const url = new URL(req.url || "/", `http://127.0.0.1:${this._port}`);
+
+      if (req.method === "GET" && url.pathname === "/api/health") {
+        res.writeHead(200);
+        res.end(JSON.stringify({ status: "ok" }));
+      } else if (req.method === "GET" && url.pathname === "/api/info") {
+        this._handleInfo(res);
+      } else if (req.method === "POST" && url.pathname === "/api/send") {
+        this._readBody(req).then((body) => this._handleSend(body, res));
+      } else if (req.method === "POST" && url.pathname === "/api/read") {
+        this._readBody(req).then((body) => this._handleRead(body, res));
+      } else if (req.method === "POST" && url.pathname === "/api/broadcast") {
+        this._readBody(req).then((body) => this._handleBroadcast(body, res));
+      } else {
+        res.writeHead(404);
+        res.end(JSON.stringify({ error: "Not found" }));
+      }
     });
   }
 

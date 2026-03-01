@@ -54,7 +54,7 @@
   "No projects registered": "등록된 프로젝트 없음",
   "Linked: {0}": "연결됨: {0}",
   "Grid opens as an editor tab.\nCtrl+Wheel to zoom individual cells.": "그리드는 에디터 탭으로 열립니다.\nCtrl+휠로 개별 셀 줌 조절 가능.",
-  "Register projects and click to switch folders. If a preset is linked, it will be auto-applied on switch.": "프로젝트를 등록하고 클릭하면 해당 폴더로 전환됩니다. 프리셋이 연결되어 있으면 전환 시 자동 적용됩니다.",
+  "Register projects and click to switch folders. Ctrl+Click to open in a new window. If a preset is linked, it will be auto-applied on switch.": "프로젝트를 등록하고 클릭하면 해당 폴더로 전환됩니다. Ctrl+클릭으로 새 창에서 열 수 있습니다. 프리셋이 연결되어 있으면 전환 시 자동 적용됩니다.",
   "Hover to select the desired rows×cols size. Supports up to 4×5 (20 cells). Grid opens as an editor tab, each cell is an independent terminal.": "마우스를 올려 원하는 행×열 크기를 선택하세요. 최대 4×5(20셀)까지 지원합니다. Grid는 에디터 탭으로 열리며, 각 셀은 독립된 터미널입니다.",
   "Zoom: Global font size (50–300%). Font/Color: Use tabs for global or per-cell settings. Changes in All tab apply to all cells. Set global first, then customize individual cells. Individual cells can be zoomed separately with Ctrl+Wheel.": "Zoom: 전체 폰트 크기(50–300%). Font/Color: 탭으로 전체 또는 개별 셀 설정. All 탭에서 변경하면 모든 셀이 통일됩니다. 전역 먼저 설정 후 개별 셀을 커스텀하세요. 개별 셀은 Ctrl+Wheel로 별도 줌 조절 가능.",
   "Commands are auto-executed in each cell when the grid opens. Use ×N to repeat the same command for N cells. Extra cells beyond the command list open as default terminals.": "Grid 오픈 시 각 셀에 순서대로 명령어가 자동 실행됩니다. ×N으로 같은 명령어를 N개 셀에 반복 가능. 명령어보다 셀이 많으면 나머지는 기본 터미널.",
@@ -71,5 +71,6 @@
   "node-pty installed successfully\\!": "node-pty 설치 완료\\!",
   "Reload the window to activate.": "창을 다시 로드하면 적용됩니다.",
   "node-pty installed successfully!": "node-pty 설치 완료!",
-  "Copy": "복사"
+  "Copy": "복사",
+  "Theme": "테마"
 }

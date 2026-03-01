@@ -8,6 +8,7 @@ docs/**
 !media/**
 !images/**
 animation.gif
+animation.mp4
 node_modules/**
 .gitignore
 tsconfig.json
