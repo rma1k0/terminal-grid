@@ -2,28 +2,52 @@
 
 [English](../README.md) | [한국어](./README.ko.md) | [中文](./README.zh-CN.md) | [日本語](./README.ja.md) | [Português (Brasil)](./README.pt-BR.md) | [Español](./README.es.md) | [Français](./README.fr.md) | [Deutsch](./README.de.md)
 
-> Plusieurs terminaux dans un seul onglet d'éditeur — propulsé par xterm.js + node-pty
-
 <p align="center">
-  <img src="../images/icon.png" width="128" alt="Terminal Grid">
+  <img src="https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/icon.png" width="128" alt="Terminal Grid">
 </p>
 
-![Terminal Grid Screenshot](../images/screenshot.png)
+> Plusieurs terminaux dans un seul onglet d'éditeur — panneaux style tmux avec xterm.js + node-pty
+
+![Terminal Grid Screenshot](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/screenshot.png)
 
 ## Fonctionnalités
 
-- **Disposition en Grille** — Ouvrez jusqu'à 4x5 (20) terminaux dans une grille personnalisable
-- **Panneau Latéral** — Gérez la taille, les préréglages, la diffusion, le zoom, les polices et les couleurs
-- **Diffusion** — Envoyez des commandes à tous les terminaux ou aux cellules sélectionnées
-- **Personnalisation par Cellule** — Couleur de fond, couleur de texte et police individuelles
-- **Préréglages** — Sauvegardez et chargez des configurations avec commandes de démarrage, labels et styles
-- **Commandes de Démarrage** — Exécutez automatiquement des commandes à la création des terminaux
-- **Labels de Cellule** — Nommez chaque cellule du terminal
+### Disposition en Grille
+
+Ouvrez jusqu'à 4x5 (20) terminaux dans une grille personnalisable. Glissez les bordures des cellules pour redimensionner — comme dans Excel.
+
+![Grid Layout](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-grid-open.gif)
+
+### Commandes de Démarrage & Préréglages
+
+Exécutez automatiquement des commandes à la création des terminaux. Sauvegardez les configurations de grille complètes en préréglages — avec chargement automatique par projet.
+
+![Startup Commands](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-startup-commands.gif)
+
+### Personnalisation par Cellule
+
+Couleur de fond, couleur de texte et police individuelles par cellule. Appliquez à toutes les cellules ou personnalisez chacune.
+
+![Cell Customization](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-cell-customize.gif)
+
+### Diffusion
+
+Envoyez des commandes à tous les terminaux ou aux cellules sélectionnées. Supporte CSI u (protocole clavier Kitty) pour les outils CLI LLM comme Claude Code et Codex.
+
+![Broadcast](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-broadcast.gif)
+
+### Serveur MCP & Agent API
+
+Bridge HTTP intégré pour l'orchestration LLM. Contrôlez les terminaux programmatiquement depuis Claude Code, Codex ou tout client MCP.
+
+### Autres Fonctionnalités
+
+- **Labels de Cellule** — Nommez chaque terminal
 - **Menu Contextuel** — Clic droit pour coller, effacer, redémarrer, terminer ou renommer
-- **Serveur MCP** — Bridge HTTP intégré pour l'orchestration LLM (Claude Code, etc.)
-- **Agent API** — Contrôle programmatique via les commandes VS Code
-- **Compatible Remote-SSH** — Fonctionne nativement avec VS Code Remote-SSH
-- **Sections Repliables** — Les sections du panneau latéral se replient, état persisté
+- **Thèmes** — 8 thèmes de couleurs intégrés
+- **Polices Personnalisées** — Chargez des fichiers .ttf/.otf/.woff/.woff2
+- **Compatible Remote-SSH** — Fonctionne nativement
+- **Panneau Latéral Repliable** — Toutes les sections se replient, état persisté
 
 ## Démarrage Rapide
 
@@ -56,6 +80,8 @@
 
 ## Intégration MCP
 
+Terminal Grid inclut un serveur MCP (Model Context Protocol) intégré pour l'orchestration LLM.
+
 ### Configuration
 
 1. `Ctrl+Shift+P` → **Terminal Grid: Copy MCP Config**
@@ -69,6 +95,21 @@
 | `send_to_cell` | Envoyer du texte à une cellule (`\r` pour exécuter) |
 | `read_cell` | Lire la sortie du terminal d'une cellule |
 | `broadcast` | Envoyer à toutes les cellules |
+
+## Agent API
+
+Les extensions peuvent contrôler Terminal Grid programmatiquement via les commandes VS Code :
+
+```typescript
+// Obtenir les informations de la grille
+const info = await vscode.commands.executeCommand('terminalGrid.getGridInfo');
+
+// Envoyer une commande à la cellule 0
+await vscode.commands.executeCommand('terminalGrid.sendToCell', 0, 'echo hello\r');
+
+// Lire la sortie de la cellule 0 (10 dernières lignes)
+const output = await vscode.commands.executeCommand('terminalGrid.readCell', 0, 10);
+```
 
 ## Prérequis
 

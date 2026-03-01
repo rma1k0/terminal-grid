@@ -2,28 +2,52 @@
 
 [English](../README.md) | [한국어](./README.ko.md) | [中文](./README.zh-CN.md) | [日本語](./README.ja.md) | [Português (Brasil)](./README.pt-BR.md) | [Español](./README.es.md) | [Français](./README.fr.md) | [Deutsch](./README.de.md)
 
-> 1つのエディタタブに複数のターミナルを — xterm.js + node-pty ベース
-
 <p align="center">
-  <img src="../images/icon.png" width="128" alt="Terminal Grid">
+  <img src="https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/icon.png" width="128" alt="Terminal Grid">
 </p>
 
-![Terminal Grid Screenshot](../images/screenshot.png)
+> 1つのエディタタブに複数のターミナルを — xterm.js + node-pty ベースの tmux スタイルペイン
+
+![Terminal Grid Screenshot](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/screenshot.png)
 
 ## 機能
 
-- **グリッドレイアウト** — 最大4x5（20個）のターミナルをカスタマイズ可能なグリッドに配置
-- **サイドバーコントロールパネル** — グリッドサイズ、プリセット、ブロードキャスト、ズーム、フォント、色の管理
-- **ブロードキャスト入力** — すべてのターミナルまたは選択したセルにコマンドを一括送信
-- **セル別カスタマイズ** — セルごとに背景色、前景色、フォントを個別設定
-- **プリセット** — 起動コマンド、ラベル、スタイルを含むグリッド構成の保存/読み込み
-- **起動コマンド** — ターミナル作成時に自動実行するコマンドを設定
-- **セルラベル** — 各ターミナルセルに名前を付ける
+### グリッドレイアウト
+
+最大4x5（20個）のターミナルをカスタマイズ可能なグリッドに配置。セル境界をドラッグしてサイズ変更 — Excelのように。
+
+![Grid Layout](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-grid-open.gif)
+
+### 起動コマンド & プリセット
+
+ターミナル作成時にコマンドを自動実行。グリッド全体の構成をプリセットとして保存 — プロジェクト別の自動読み込みに対応。
+
+![Startup Commands](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-startup-commands.gif)
+
+### セル別カスタマイズ
+
+セルごとに背景色、前景色、フォントを個別設定。全セルに一括適用または個別にカスタマイズ可能。
+
+![Cell Customization](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-cell-customize.gif)
+
+### ブロードキャスト入力
+
+すべてのターミナルまたは選択したセルにコマンドを一括送信。Claude Code、Codex などの LLM CLI ツール向けに CSI u（Kitty キーボードプロトコル）をサポート。
+
+![Broadcast](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-broadcast.gif)
+
+### MCPサーバー & Agent API
+
+LLMオーケストレーション用の組み込みHTTPブリッジ。Claude Code、Codex、または任意のMCPクライアントからプログラムでターミナルを制御。
+
+### その他の機能
+
+- **セルラベル** — 各ターミナルに名前を付ける
 - **コンテキストメニュー** — 右クリックで貼り付け、クリア、再起動、終了、名前変更
-- **MCPサーバー** — LLMオーケストレーション用の組み込みHTTPブリッジ（Claude Codeなど）
-- **Agent API** — VS Codeコマンドによるプログラム制御
-- **Remote-SSH対応** — VS Code Remote-SSHですぐに使用可能
-- **折りたたみ可能なセクション** — サイドバーセクションを折りたたみ、状態を自動保存
+- **テーマ** — 8種類の組み込みカラーテーマ
+- **カスタムフォント** — .ttf/.otf/.woff/.woff2 ファイルを読み込み
+- **Remote-SSH対応** — すぐに使用可能
+- **折りたたみ可能なサイドバー** — すべてのセクションを折りたたみ、状態を自動保存
 
 ## クイックスタート
 
@@ -73,6 +97,8 @@ Terminal GridにはLLMオーケストレーション用のMCP（Model Context Pr
 | `broadcast` | すべてのセルに一括送信 |
 
 ## Agent API
+
+他の拡張機能からVS Codeコマンドを使ってTerminal Gridをプログラムで制御できます：
 
 ```typescript
 // グリッド情報を取得

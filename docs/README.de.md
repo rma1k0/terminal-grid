@@ -2,28 +2,52 @@
 
 [English](../README.md) | [한국어](./README.ko.md) | [中文](./README.zh-CN.md) | [日本語](./README.ja.md) | [Português (Brasil)](./README.pt-BR.md) | [Español](./README.es.md) | [Français](./README.fr.md) | [Deutsch](./README.de.md)
 
-> Mehrere Terminals in einem einzigen Editor-Tab — basierend auf xterm.js + node-pty
-
 <p align="center">
-  <img src="../images/icon.png" width="128" alt="Terminal Grid">
+  <img src="https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/icon.png" width="128" alt="Terminal Grid">
 </p>
 
-![Terminal Grid Screenshot](../images/screenshot.png)
+> Mehrere Terminals in einem einzigen Editor-Tab — tmux-ähnliche Panels mit xterm.js + node-pty
+
+![Terminal Grid Screenshot](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/screenshot.png)
 
 ## Funktionen
 
-- **Raster-Layout** — Bis zu 4x5 (20) Terminals in einem anpassbaren Raster
-- **Seitenleisten-Panel** — Rastergröße, Vorlagen, Broadcast, Zoom, Schriften und Farben verwalten
-- **Broadcast** — Befehle an alle Terminals oder ausgewählte Zellen senden
-- **Zell-Anpassung** — Individuelle Hintergrundfarbe, Textfarbe und Schrift pro Zelle
-- **Vorlagen** — Rasterkonfigurationen mit Startbefehlen, Labels und Stilen speichern/laden
-- **Startbefehle** — Befehle beim Erstellen der Terminals automatisch ausführen
-- **Zell-Labels** — Jede Terminal-Zelle benennen
+### Raster-Layout
+
+Bis zu 4x5 (20) Terminals in einem anpassbaren Raster. Ziehen Sie Zellgrenzen zum Ändern der Größe — wie in Excel.
+
+![Grid Layout](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-grid-open.gif)
+
+### Startbefehle & Vorlagen
+
+Befehle beim Erstellen der Terminals automatisch ausführen. Gesamte Rasterkonfigurationen als Vorlagen speichern — mit automatischem Laden pro Projekt.
+
+![Startup Commands](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-startup-commands.gif)
+
+### Zell-Anpassung
+
+Individuelle Hintergrundfarbe, Textfarbe und Schrift pro Zelle. Auf alle Zellen gleichzeitig anwenden oder einzeln anpassen.
+
+![Cell Customization](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-cell-customize.gif)
+
+### Broadcast
+
+Befehle an alle Terminals oder ausgewählte Zellen gleichzeitig senden. Unterstützt CSI u (Kitty-Tastaturprotokoll) für LLM-CLI-Tools wie Claude Code und Codex.
+
+![Broadcast](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-broadcast.gif)
+
+### MCP-Server & Agent API
+
+Integrierte HTTP-Bridge für LLM-Orchestrierung. Terminals programmatisch von Claude Code, Codex oder jedem MCP-Client steuern.
+
+### Weitere Funktionen
+
+- **Zell-Labels** — Jedes Terminal benennen
 - **Kontextmenü** — Rechtsklick zum Einfügen, Löschen, Neustarten, Beenden oder Umbenennen
-- **MCP-Server** — Integrierte HTTP-Bridge für LLM-Orchestrierung (Claude Code, etc.)
-- **Agent API** — Programmatische Steuerung über VS Code-Befehle
-- **Remote-SSH-kompatibel** — Funktioniert sofort mit VS Code Remote-SSH
-- **Einklappbare Abschnitte** — Seitenleisten-Abschnitte einklappbar, Zustand gespeichert
+- **Themes** — 8 integrierte Farbthemen
+- **Benutzerdefinierte Schriften** — .ttf/.otf/.woff/.woff2-Dateien laden
+- **Remote-SSH-kompatibel** — Funktioniert sofort
+- **Einklappbare Seitenleiste** — Alle Abschnitte einklappbar, Zustand gespeichert
 
 ## Schnellstart
 
@@ -56,6 +80,8 @@
 
 ## MCP-Integration
 
+Terminal Grid enthält einen integrierten MCP-Server (Model Context Protocol) für LLM-Orchestrierung.
+
 ### Einrichtung
 
 1. `Ctrl+Shift+P` → **Terminal Grid: Copy MCP Config**
@@ -69,6 +95,21 @@
 | `send_to_cell` | Text an eine Zelle senden (`\r` zum Ausführen) |
 | `read_cell` | Terminal-Ausgabe einer Zelle lesen |
 | `broadcast` | An alle Zellen senden |
+
+## Agent API
+
+Erweiterungen können Terminal Grid programmatisch über VS Code-Befehle steuern:
+
+```typescript
+// Raster-Informationen abrufen
+const info = await vscode.commands.executeCommand('terminalGrid.getGridInfo');
+
+// Befehl an Zelle 0 senden
+await vscode.commands.executeCommand('terminalGrid.sendToCell', 0, 'echo hello\r');
+
+// Ausgabe von Zelle 0 lesen (letzte 10 Zeilen)
+const output = await vscode.commands.executeCommand('terminalGrid.readCell', 0, 10);
+```
 
 ## Voraussetzungen
 

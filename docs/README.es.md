@@ -2,28 +2,52 @@
 
 [English](../README.md) | [한국어](./README.ko.md) | [中文](./README.zh-CN.md) | [日本語](./README.ja.md) | [Português (Brasil)](./README.pt-BR.md) | [Español](./README.es.md) | [Français](./README.fr.md) | [Deutsch](./README.de.md)
 
-> Múltiples terminales en una sola pestaña del editor — con xterm.js + node-pty
-
 <p align="center">
-  <img src="../images/icon.png" width="128" alt="Terminal Grid">
+  <img src="https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/icon.png" width="128" alt="Terminal Grid">
 </p>
 
-![Terminal Grid Screenshot](../images/screenshot.png)
+> Múltiples terminales en una sola pestaña del editor — paneles estilo tmux con xterm.js + node-pty
+
+![Terminal Grid Screenshot](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/screenshot.png)
 
 ## Características
 
-- **Diseño en Cuadrícula** — Abre hasta 4x5 (20) terminales en una cuadrícula personalizable
-- **Panel Lateral** — Gestiona tamaño, presets, broadcast, zoom, fuentes y colores
-- **Broadcast** — Envía comandos a todos los terminales o celdas seleccionadas
-- **Personalización por Celda** — Color de fondo, color de texto y fuente individual
-- **Presets** — Guarda y carga configuraciones con comandos de inicio, etiquetas y estilos
-- **Comandos de Inicio** — Ejecuta comandos automáticamente al crear terminales
-- **Etiquetas de Celda** — Nombra cada celda del terminal
+### Diseño en Cuadrícula
+
+Abre hasta 4x5 (20) terminales en una cuadrícula personalizable. Arrastra los bordes de las celdas para redimensionar — como en Excel.
+
+![Grid Layout](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-grid-open.gif)
+
+### Comandos de Inicio & Presets
+
+Ejecuta comandos automáticamente al crear terminales. Guarda configuraciones completas de la cuadrícula como presets — con carga automática por proyecto.
+
+![Startup Commands](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-startup-commands.gif)
+
+### Personalización por Celda
+
+Color de fondo, color de texto y fuente individual por celda. Aplica a todas las celdas a la vez o personaliza cada una.
+
+![Cell Customization](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-cell-customize.gif)
+
+### Broadcast
+
+Envía comandos a todos los terminales o celdas seleccionadas a la vez. Soporta CSI u (protocolo de teclado Kitty) para herramientas CLI LLM como Claude Code y Codex.
+
+![Broadcast](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-broadcast.gif)
+
+### Servidor MCP & Agent API
+
+Bridge HTTP integrado para orquestación LLM. Controla terminales programáticamente desde Claude Code, Codex o cualquier cliente MCP.
+
+### Más Funciones
+
+- **Etiquetas de Celda** — Nombra cada terminal
 - **Menú Contextual** — Clic derecho para pegar, limpiar, reiniciar, terminar o renombrar
-- **Servidor MCP** — Bridge HTTP integrado para orquestación LLM (Claude Code, etc.)
-- **Agent API** — Control programático via comandos VS Code
-- **Compatible con Remote-SSH** — Funciona con VS Code Remote-SSH de forma nativa
-- **Secciones Plegables** — Las secciones del panel lateral se pliegan, estado persistido
+- **Temas** — 8 temas de colores integrados
+- **Fuentes Personalizadas** — Carga archivos .ttf/.otf/.woff/.woff2
+- **Compatible con Remote-SSH** — Funciona de forma nativa
+- **Panel Lateral Plegable** — Todas las secciones se pliegan, estado persistido
 
 ## Inicio Rápido
 
@@ -56,6 +80,8 @@
 
 ## Integración MCP
 
+Terminal Grid incluye un servidor MCP (Model Context Protocol) integrado para orquestación LLM.
+
 ### Configuración
 
 1. `Ctrl+Shift+P` → **Terminal Grid: Copy MCP Config**
@@ -69,6 +95,21 @@
 | `send_to_cell` | Enviar texto a una celda (`\r` para ejecutar) |
 | `read_cell` | Leer salida del terminal de una celda |
 | `broadcast` | Enviar a todas las celdas |
+
+## Agent API
+
+Las extensiones pueden controlar Terminal Grid programáticamente via comandos VS Code:
+
+```typescript
+// Obtener información de la cuadrícula
+const info = await vscode.commands.executeCommand('terminalGrid.getGridInfo');
+
+// Enviar comando a la celda 0
+await vscode.commands.executeCommand('terminalGrid.sendToCell', 0, 'echo hello\r');
+
+// Leer salida de la celda 0 (últimas 10 líneas)
+const output = await vscode.commands.executeCommand('terminalGrid.readCell', 0, 10);
+```
 
 ## Requisitos
 
