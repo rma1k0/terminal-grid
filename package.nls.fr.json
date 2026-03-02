@@ -21,5 +21,6 @@
   "config.backgroundColor": "Couleur de fond du terminal (vide = thème IDE)",
   "config.foregroundColor": "Couleur de texte du terminal (vide = thème IDE)",
   "config.colorTheme": "Thème de couleur du terminal (vide = thème IDE)",
+  "config.shellType": "Type de shell par défaut (vide = détection automatique depuis l'OS/environnement)",
   "config.apiPort": "Port HTTP du pont MCP (0 = désactivé). Redémarrage nécessaire."
 }

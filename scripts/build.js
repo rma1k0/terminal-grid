@@ -37,3 +37,45 @@ esbuild.buildSync({
 });
 
 console.log("Build complete (webview + extension).");
+
+// ── Package VSIX & deploy ──
+const { execSync } = require("child_process");
+const AdmZip = require("adm-zip");
+const pkg = require("../package.json");
+const vsixName = `terminal-grid-${pkg.version}.vsix`;
+
+// Package
+execSync("npx vsce package", { stdio: "inherit" });
+
+// Deploy: extract VSIX directly into extensions folder
+const extDir = path.join(process.env.USERPROFILE || process.env.HOME, ".vscode", "extensions");
+const targetDir = path.join(extDir, `koenma.terminal-grid-${pkg.version}`);
+
+// Remove other-version folders
+if (fs.existsSync(extDir)) {
+  for (const name of fs.readdirSync(extDir)) {
+    if (name.startsWith("koenma.terminal-grid-") && name !== path.basename(targetDir)) {
+      fs.rmSync(path.join(extDir, name), { recursive: true, force: true });
+      console.log("Removed old: " + name);
+    }
+  }
+}
+
+// Extract VSIX (it's a zip) — files are under "extension/" prefix
+const zip = new AdmZip(vsixName);
+const entries = zip.getEntries();
+fs.mkdirSync(targetDir, { recursive: true });
+for (const entry of entries) {
+  if (entry.entryName.startsWith("extension/")) {
+    const rel = entry.entryName.slice("extension/".length);
+    if (!rel) continue;
+    const dest = path.join(targetDir, rel);
+    if (entry.isDirectory) {
+      fs.mkdirSync(dest, { recursive: true });
+    } else {
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      fs.writeFileSync(dest, entry.getData());
+    }
+  }
+}
+console.log(`Deployed to ${targetDir}. Reload VS Code to activate.`);

@@ -40,6 +40,7 @@
   "IDE Default": "IDE 기본값",
   "Reset to IDE Default": "IDE 기본값으로 초기화",
   "Custom command…": "사용자 명령…",
+  "Select command…": "명령 선택…",
   "Preset name…": "프리셋 이름…",
   "Select preset…": "프리셋 선택…",
   "Type command…": "명령 입력…",
@@ -72,5 +73,11 @@
   "Reload the window to activate.": "창을 다시 로드하면 적용됩니다.",
   "node-pty installed successfully!": "node-pty 설치 완료!",
   "Copy": "복사",
-  "Theme": "테마"
+  "Theme": "테마",
+  "Shell": "쉘",
+  "Auto": "자동",
+  "Command": "명령",
+  "Startup command…": "시작 명령…",
+  "Set shell type and startup command per cell. Use All tab for global defaults, or individual tabs for per-cell overrides.": "셀별 쉘 종류 및 시작 명령을 설정합니다. 전체 탭은 기본값, 개별 탭은 셀별 오버라이드입니다.",
+  "Apply": "적용"
 }

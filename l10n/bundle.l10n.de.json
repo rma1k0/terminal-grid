@@ -40,6 +40,7 @@
   "IDE Default": "IDE-Standard",
   "Reset to IDE Default": "Auf IDE-Standard zurücksetzen",
   "Custom command…": "Benutzerdefinierter Befehl…",
+  "Select command…": "Befehl auswählen…",
   "Preset name…": "Voreinstellungsname…",
   "Select preset…": "Voreinstellung wählen…",
   "Type command…": "Befehl eingeben…",
@@ -72,5 +73,11 @@
   "Reload the window to activate.": "Laden Sie das Fenster neu, um es zu aktivieren.",
   "node-pty installed successfully!": "node-pty erfolgreich installiert!",
   "Copy": "Kopieren",
-  "Theme": "Farbschema"
+  "Theme": "Farbschema",
+  "Shell": "Shell",
+  "Auto": "Auto",
+  "Command": "Befehl",
+  "Startup command…": "Startbefehl…",
+  "Set shell type and startup command per cell. Use All tab for global defaults, or individual tabs for per-cell overrides.": "Shell-Typ und Startbefehl pro Zelle festlegen. Verwenden Sie den Tab Alle für globale Standards oder einzelne Tabs für zellenspezifische Überschreibungen.",
+  "Apply": "Anwenden"
 }

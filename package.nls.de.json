@@ -21,5 +21,6 @@
   "config.backgroundColor": "Terminal-Hintergrundfarbe (leer = IDE-Design)",
   "config.foregroundColor": "Terminal-Textfarbe (leer = IDE-Design)",
   "config.colorTheme": "Terminal-Farbschema (leer = IDE-Design)",
+  "config.shellType": "Standard-Shell-Typ (leer = automatische Erkennung vom Betriebssystem/Umgebung)",
   "config.apiPort": "HTTP-Port für MCP-Brücke (0 = deaktiviert). Neustart erforderlich."
 }

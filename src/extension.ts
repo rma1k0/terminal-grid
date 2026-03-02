@@ -19,7 +19,7 @@ export function activate(context: vscode.ExtensionContext): void {
         startupCommands: {command: string; count: number}[];
         cellLabels: string[]; zoomPercent: number;
         fontFamily: string; bgColor: string; fgColor: string;
-        colorTheme?: string;
+        colorTheme?: string; shellType?: string; defaultCommand?: string;
       }>>("presets", []);
       const preset = presets.find((p) => p.name === presetName);
       if (preset) {
@@ -31,8 +31,10 @@ export function activate(context: vscode.ExtensionContext): void {
         cfg.update("backgroundColor", preset.bgColor, vscode.ConfigurationTarget.Global);
         cfg.update("foregroundColor", preset.fgColor, vscode.ConfigurationTarget.Global);
         cfg.update("colorTheme", preset.colorTheme || "", vscode.ConfigurationTarget.Global);
+        cfg.update("shellType", preset.shellType || "", vscode.ConfigurationTarget.Global);
         context.globalState.update("startupCommands", preset.startupCommands || []);
         context.globalState.update("cellLabels", preset.cellLabels || []);
+        context.globalState.update("defaultCommand", preset.defaultCommand || "");
       }
     }
   }

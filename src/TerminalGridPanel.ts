@@ -20,6 +20,12 @@ interface CustomFont {
   path: string;
 }
 
+interface ShellDescriptor {
+  name: string;
+  path: string;
+  args: string[];
+}
+
 const FONT_FORMATS: Record<string, string> = {
   ".ttf": "truetype",
   ".otf": "opentype",
@@ -54,6 +60,94 @@ export class TerminalGridPanel {
     return TerminalGridPanel._nodePty as typeof import("node-pty") | null;
   }
 
+  public static getAvailableShells(): ShellDescriptor[] {
+    const shells: ShellDescriptor[] = [{ name: "IDE Default", path: "", args: [] }];
+    try {
+      const fs = require("fs") as typeof import("fs");
+      const cp = require("child_process") as typeof import("child_process");
+      const seen = new Set<string>();
+
+      function shellExists(p: string): boolean {
+        try {
+          // Absolute path → check file
+          if (/[/\\]/.test(p)) return fs.existsSync(p);
+          // Bare name (e.g. "powershell.exe") → check via where/which
+          const cmd = process.platform === "win32" ? `where ${p}` : `which ${p}`;
+          cp.execSync(cmd, { stdio: "ignore", timeout: 500 });
+          return true;
+        } catch { return false; }
+      }
+
+      const platform = process.platform === "win32" ? "windows"
+        : process.platform === "darwin" ? "osx" : "linux";
+      const profiles = vscode.workspace.getConfiguration(
+        `terminal.integrated.profiles.${platform}`
+      );
+      // Read VS Code terminal profiles
+      if (profiles) {
+        for (const name of Object.keys(profiles)) {
+          try {
+            const profile = profiles.get<{ path?: string | string[]; args?: string[] }>(name);
+            if (!profile || typeof profile !== "object") continue;
+            const shellPath = Array.isArray(profile.path) ? profile.path[0] : profile.path;
+            if (shellPath && shellExists(shellPath)) {
+              shells.push({ name, path: shellPath, args: profile.args || [] });
+              seen.add(shellPath.toLowerCase());
+            }
+          } catch { /* skip invalid profile */ }
+        }
+      }
+      // Merge well-known shells (skip duplicates, only if installed)
+      const defaults: ShellDescriptor[] = process.platform === "win32" ? [
+        { name: "PowerShell", path: "powershell.exe", args: ["-NoLogo"] },
+        { name: "PowerShell 7", path: "pwsh.exe", args: ["-NoLogo"] },
+        { name: "Command Prompt", path: "cmd.exe", args: [] },
+        { name: "Git Bash", path: "C:\\Program Files\\Git\\bin\\bash.exe", args: ["--login"] },
+        { name: "WSL", path: "wsl.exe", args: [] },
+      ] : [
+        { name: "Bash", path: "/bin/bash", args: ["--login"] },
+        { name: "Zsh", path: "/bin/zsh", args: ["--login"] },
+        { name: "Fish", path: "/usr/bin/fish", args: [] },
+        { name: "sh", path: "/bin/sh", args: [] },
+      ];
+      for (const d of defaults) {
+        if (!seen.has(d.path.toLowerCase()) && shellExists(d.path)) {
+          shells.push(d);
+          seen.add(d.path.toLowerCase());
+        }
+      }
+    } catch { /* return at least IDE Default */ }
+    return shells;
+  }
+
+  private _resolveShell(shellType?: string): { path: string; args: string[] } {
+    if (!shellType) {
+      // Current "auto" behavior
+      if (process.platform === "win32") {
+        if (TerminalGridPanel._getNodePty()) {
+          return { path: "powershell.exe", args: ["-NoLogo", "-NoProfile"] };
+        }
+        return { path: process.env.COMSPEC || "cmd.exe", args: [] };
+      }
+      return { path: process.env.SHELL || "bash", args: [] };
+    }
+    // Look up from available shells
+    const available = TerminalGridPanel.getAvailableShells();
+    const match = available.find(s => s.path === shellType || s.name === shellType);
+    if (match && match.path) {
+      return { path: match.path, args: match.args };
+    }
+    // Direct path - infer args
+    const lower = shellType.toLowerCase();
+    if (lower.includes("powershell") || lower.includes("pwsh")) {
+      return { path: shellType, args: ["-NoLogo"] };
+    }
+    if (lower.includes("bash") || lower.includes("zsh")) {
+      return { path: shellType, args: ["--login"] };
+    }
+    return { path: shellType, args: [] };
+  }
+
   public static createOrShow(
     context: vscode.ExtensionContext,
     rows: number,
@@ -83,6 +177,7 @@ export class TerminalGridPanel {
       cols
     );
     context.globalState.update("lastGrid", { rows, cols });
+    vscode.commands.executeCommand("terminalGrid._refreshSidebar");
   }
 
   public static revive(
@@ -101,6 +196,7 @@ export class TerminalGridPanel {
       cols
     );
     context.globalState.update("lastGrid", { rows, cols });
+    vscode.commands.executeCommand("terminalGrid._refreshSidebar");
   }
 
   /** Get the correct Enter sequence for a terminal cell */
@@ -214,6 +310,14 @@ export class TerminalGridPanel {
     this._rows = rows;
     this._cols = cols;
 
+    // Ensure webview options use current extensionUri (path changes on update)
+    this._panel.webview.options = {
+      enableScripts: true,
+      localResourceRoots: [
+        vscode.Uri.joinPath(context.extensionUri, "media"),
+      ],
+    };
+
     this._panel.webview.html = this._getHtml();
 
     this._panel.webview.onDidReceiveMessage(async (msg) => {
@@ -321,15 +425,12 @@ export class TerminalGridPanel {
 
   private _spawnPty(
     nodePty: typeof import("node-pty") | null,
-    cols: number, rows: number, cwd: string
+    cols: number, rows: number, cwd: string,
+    shellType?: string
   ): PtyLike {
+    const resolved = this._resolveShell(shellType);
     if (nodePty) {
-      const shell =
-        process.platform === "win32"
-          ? "powershell.exe"
-          : process.env.SHELL || "bash";
-      const args = process.platform === "win32" ? ["-NoLogo", "-NoProfile"] : [];
-      const proc = nodePty.spawn(shell, args, {
+      const proc = nodePty.spawn(resolved.path, resolved.args, {
         name: "xterm-256color",
         cols, rows, cwd,
         env: process.env as Record<string, string>,
@@ -343,11 +444,7 @@ export class TerminalGridPanel {
     }
     // Fallback: child_process.spawn
     const { spawn } = require("child_process") as typeof import("child_process");
-    const shell =
-      process.platform === "win32"
-        ? process.env.COMSPEC || "cmd.exe"
-        : process.env.SHELL || "bash";
-    const proc = spawn(shell, [], { cwd, env: process.env, windowsHide: true });
+    const proc = spawn(resolved.path, resolved.args, { cwd, env: process.env, windowsHide: true });
     return {
       onData: (cb) => {
         proc.stdout?.on("data", (d: Buffer) => cb(d.toString()));
@@ -374,28 +471,36 @@ export class TerminalGridPanel {
       );
     }
 
-    // Expand startup commands {command, count}[] → flat list, apply 1:1 to cells
+    // Resolve per-cell startup commands:
+    // Priority: cellOverrides[i].startupCommand > old startupCommands list > defaultCommand
     const rawCmds = this._context.globalState.get<unknown[]>("startupCommands", []);
-    const pendingCmds: string[] = [];
+    const expandedCmds: string[] = [];
     for (const item of rawCmds) {
       if (typeof item === "string") {
-        pendingCmds.push(item);
+        expandedCmds.push(item);
       } else if (item && typeof item === "object" && "command" in item) {
         const sc = item as { command: string; count: number };
         for (let j = 0; j < (sc.count || 1); j++) {
-          pendingCmds.push(sc.command);
+          expandedCmds.push(sc.command);
         }
       }
     }
+    const defaultCommand = this._context.globalState.get<string>("defaultCommand", "");
 
     const c = defaultCols || 80;
     const r = defaultRows || 24;
 
+    const globalShell = vscode.workspace.getConfiguration("terminalGrid").get<string>("shellType", "");
+    const cellOverrides = this._context.globalState.get<Record<number, { shellType?: string; startupCommand?: string }>>("cellOverrides", {});
+
     // Spawn + wire handler immediately per cell (handler must be registered
     // before the first PTY output arrives, so spawn and onData stay together)
     for (let i = 0; i < total; i++) {
-      const pty = this._spawnPty(nodePty, c, r, cwd);
+      const cellShell = cellOverrides[i]?.shellType || globalShell || undefined;
+      const pty = this._spawnPty(nodePty, c, r, cwd, cellShell);
       const id = i;
+      // Per-cell command > old list > default
+      const pendingCmd = cellOverrides[i]?.startupCommand || expandedCmds[i] || defaultCommand || "";
       this._outputBuffers[id] = "";
       this._csiUMode[id] = false;
       let startupSent = false;
@@ -409,9 +514,9 @@ export class TerminalGridPanel {
             this._outputBuffers[id] = this._outputBuffers[id].slice(-TerminalGridPanel.OUTPUT_BUFFER_SIZE);
           }
           this._panel.webview.postMessage({ type: "output", id, data });
-          if (!startupSent && pendingCmds[id]) {
+          if (!startupSent && pendingCmd) {
             startupSent = true;
-            this._terminals[id]?.pty.write(pendingCmds[id] + "\r");
+            this._terminals[id]?.pty.write(pendingCmd + "\r");
           }
         }
       });
@@ -438,9 +543,13 @@ export class TerminalGridPanel {
       process.env.HOME ||
       ".";
 
-    const pty = this._spawnPty(TerminalGridPanel._getNodePty(), 80, 24, cwd);
+    const globalShell = vscode.workspace.getConfiguration("terminalGrid").get<string>("shellType", "");
+    const cellOverrides = this._context.globalState.get<Record<number, { shellType?: string; startupCommand?: string }>>("cellOverrides", {});
+    const cellShell = cellOverrides[id]?.shellType || globalShell || undefined;
+    const pty = this._spawnPty(TerminalGridPanel._getNodePty(), 80, 24, cwd, cellShell);
 
     // Re-apply startup command for this cell
+    // Priority: cellOverrides > old startupCommands list > defaultCommand
     const rawCmds = this._context.globalState.get<unknown[]>("startupCommands", []);
     const expanded: string[] = [];
     for (const item of rawCmds) {
@@ -453,7 +562,8 @@ export class TerminalGridPanel {
         }
       }
     }
-    const pendingCmd = expanded[id] || "";
+    const defaultCommand = this._context.globalState.get<string>("defaultCommand", "");
+    const pendingCmd = cellOverrides[id]?.startupCommand || expanded[id] || defaultCommand || "";
     let startupSent = false;
     this._outputBuffers[id] = "";
     this._csiUMode[id] = false;
@@ -476,6 +586,16 @@ export class TerminalGridPanel {
     });
 
     this._terminals[id] = { id, pty };
+  }
+
+  public restartCell(id: number): void {
+    this._restartTerminal(id);
+  }
+
+  public restartAllCells(): void {
+    for (const t of this._terminals) {
+      this._restartTerminal(t.id);
+    }
   }
 
   public dispose(): void {

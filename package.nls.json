@@ -21,5 +21,6 @@
   "config.backgroundColor": "Terminal background color override (empty = follow IDE theme)",
   "config.foregroundColor": "Terminal foreground color override (empty = follow IDE theme)",
   "config.colorTheme": "Terminal color theme (empty = follow IDE theme)",
+  "config.shellType": "Default shell type (empty = auto-detect from OS/environment)",
   "config.apiPort": "HTTP API port for MCP bridge (0 = disabled). Restart required."
 }

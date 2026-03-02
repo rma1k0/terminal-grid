@@ -65,6 +65,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
           if (msg.key && msg.value !== undefined) {
             await cfg.update(msg.key, msg.value, vscode.ConfigurationTarget.Global);
           }
+          if (msg.key === "shellType" && TerminalGridPanel.currentPanel) {
+            TerminalGridPanel.currentPanel.restartAllCells();
+          }
           break;
         }
         case "getConfig": {
@@ -207,7 +210,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
             startupCommands: {command: string; count: number}[];
             cellLabels: string[]; zoomPercent: number;
             fontFamily: string; bgColor: string; fgColor: string;
-            colorTheme?: string;
+            colorTheme?: string; shellType?: string; defaultCommand?: string;
           } | undefined;
           if (!preset) break;
           const cfg = vscode.workspace.getConfiguration("terminalGrid");
@@ -218,8 +221,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
           await cfg.update("backgroundColor", preset.bgColor, vscode.ConfigurationTarget.Global);
           await cfg.update("foregroundColor", preset.fgColor, vscode.ConfigurationTarget.Global);
           await cfg.update("colorTheme", preset.colorTheme || "", vscode.ConfigurationTarget.Global);
+          await cfg.update("shellType", preset.shellType || "", vscode.ConfigurationTarget.Global);
           await this._context.globalState.update("startupCommands", preset.startupCommands || []);
           await this._context.globalState.update("cellLabels", preset.cellLabels || []);
+          await this._context.globalState.update("defaultCommand", preset.defaultCommand || "");
           // Auto-open grid with loaded preset dimensions
           TerminalGridPanel.createOrShow(this._context, preset.rows, preset.cols);
           this.sendConfig();
@@ -272,8 +277,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         }
         // ── Per-cell config ──
         case "setCellConfig": {
-          const overrides = this._context.globalState.get<Record<number, {bgColor?: string; fgColor?: string; fontFamily?: string; themeName?: string}>>("cellOverrides", {});
-          overrides[msg.cellId] = { bgColor: msg.bgColor || "", fgColor: msg.fgColor || "", fontFamily: msg.fontFamily || "", themeName: msg.themeName || "" };
+          const overrides = this._context.globalState.get<Record<number, {bgColor?: string; fgColor?: string; fontFamily?: string; themeName?: string; shellType?: string}>>("cellOverrides", {});
+          overrides[msg.cellId] = { bgColor: msg.bgColor || "", fgColor: msg.fgColor || "", fontFamily: msg.fontFamily || "", themeName: msg.themeName || "", shellType: (overrides[msg.cellId]?.shellType || "") };
           await this._context.globalState.update("cellOverrides", overrides);
           if (TerminalGridPanel.currentPanel) {
             const tc = msg.themeName ? resolveThemeColors(msg.themeName) : null;
@@ -281,11 +286,46 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
           }
           break;
         }
+        case "setShellForCell": {
+          const overrides = this._context.globalState.get<Record<number, {bgColor?: string; fgColor?: string; fontFamily?: string; themeName?: string; shellType?: string}>>("cellOverrides", {});
+          if (!overrides[msg.cellId]) {
+            overrides[msg.cellId] = {};
+          }
+          overrides[msg.cellId].shellType = msg.shellType || "";
+          await this._context.globalState.update("cellOverrides", overrides);
+          if (TerminalGridPanel.currentPanel) {
+            TerminalGridPanel.currentPanel.restartCell(msg.cellId);
+          }
+          break;
+        }
+        case "setDefaultCommand": {
+          await this._context.globalState.update("defaultCommand", msg.command || "");
+          break;
+        }
+        case "setCellCommand": {
+          const overrides = this._context.globalState.get<Record<number, {bgColor?: string; fgColor?: string; fontFamily?: string; themeName?: string; shellType?: string; startupCommand?: string}>>("cellOverrides", {});
+          if (!overrides[msg.cellId]) {
+            overrides[msg.cellId] = {};
+          }
+          overrides[msg.cellId].startupCommand = msg.command || "";
+          await this._context.globalState.update("cellOverrides", overrides);
+          break;
+        }
         case "clearAllCellOverrides": {
           await this._context.globalState.update("cellOverrides", {});
           if (TerminalGridPanel.currentPanel) {
             TerminalGridPanel.currentPanel.clearCellOverrides();
           }
+          break;
+        }
+        case "clearAllCellShells": {
+          const overrides = this._context.globalState.get<Record<number, {bgColor?: string; fgColor?: string; fontFamily?: string; themeName?: string; shellType?: string; startupCommand?: string}>>("cellOverrides", {});
+          for (const key of Object.keys(overrides)) {
+            if (overrides[parseInt(key)]) {
+              overrides[parseInt(key)].shellType = "";
+            }
+          }
+          await this._context.globalState.update("cellOverrides", overrides);
           break;
         }
         case "saveSectionStates": {
@@ -347,6 +387,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       bgColor: cfg.get<string>("backgroundColor", ""),
       fgColor: cfg.get<string>("foregroundColor", ""),
       colorTheme: cfg.get<string>("colorTheme", ""),
+      shellType: cfg.get<string>("shellType", ""),
+      defaultCommand: this._context.globalState.get<string>("defaultCommand", ""),
     };
     const presets = this._context.globalState.get<Record<string, unknown>[]>("presets", []);
     const existIdx = presets.findIndex((p) => (p as {name: string}).name === name);
@@ -367,10 +409,11 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     const presets = this._context.globalState.get<Record<string, unknown>[]>("presets", []);
     const projectPresets = this._context.globalState.get<Record<string, string>>("projectPresets", {});
     const cellLabels = this._context.globalState.get<string[]>("cellLabels", []);
-    const cellOverrides = this._context.globalState.get<Record<number, {bgColor?: string; fgColor?: string; fontFamily?: string}>>("cellOverrides", {});
+    const cellOverrides = this._context.globalState.get<Record<number, {bgColor?: string; fgColor?: string; fontFamily?: string; shellType?: string}>>("cellOverrides", {});
     const sectionStates = this._context.globalState.get<Record<string, boolean>>("sectionStates", {});
     const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || "";
     const panel = TerminalGridPanel.currentPanel;
+    const availableShells = TerminalGridPanel.getAvailableShells();
     this._view.webview.postMessage({
       type: "configValues",
       zoom: cfg.get<number>("zoomPercent", 100),
@@ -378,7 +421,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       bgColor: cfg.get<string>("backgroundColor", ""),
       fgColor: cfg.get<string>("foregroundColor", ""),
       colorTheme: cfg.get<string>("colorTheme", ""),
+      shellType: cfg.get<string>("shellType", ""),
+      defaultCommand: this._context.globalState.get<string>("defaultCommand", ""),
       themeNames: THEME_NAMES,
+      availableShells: availableShells.map((s) => ({ name: s.name, path: s.path })),
       customFonts: customFonts.map((f) => f.name),
       startupCommands: startupCommands,
       projects: projects,
@@ -730,6 +776,34 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     .stab.has-override {
       border-color: rgba(255,170,0,.35);
     }
+    /* ── Command summary ── */
+    .cmd-summary-divider {
+      height: 1px; background: rgba(255,255,255,.06); margin: 10px 0 8px;
+    }
+    .cmd-summary-list { display: flex; flex-direction: column; gap: 3px; }
+    .cmd-summary-item {
+      display: flex; align-items: center; gap: 6px;
+      padding: 4px 8px;
+      background: rgba(255,255,255,.02);
+      border: 1px solid rgba(255,255,255,.04);
+      border-radius: 5px; font-size: 10px;
+    }
+    .cmd-summary-label {
+      opacity: .45; font-weight: 600; min-width: 28px; flex-shrink: 0;
+      font-variant-numeric: tabular-nums;
+    }
+    .cmd-summary-text {
+      flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      font-family: monospace; opacity: .75; font-size: 10px;
+    }
+    .cmd-summary-del {
+      width: 16px; height: 16px; border: none; border-radius: 3px;
+      background: transparent; color: rgba(255,255,255,.25);
+      font-size: 12px; line-height: 1; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; transition: all .1s;
+    }
+    .cmd-summary-del:hover { background: rgba(255,80,80,.2); color: #f55; }
     /* ── node-pty banner ── */
     .pty-banner {
       display: flex; align-items: center; gap: 10px;
@@ -882,42 +956,59 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
             <button class="color-reset hidden" id="fgReset" title="${vscode.l10n.t("Reset to IDE Default")}">\u00d7</button>
           </div>
         </div>
+
       </div>
     </div>
 
+    <!-- Startup Commands -->
     <div class="glass-card" data-section="startup">
       <div class="section-header collapsible">
         <div class="section-label">${vscode.l10n.t("Startup Commands")}</div>
         <span class="tip-wrap">
           <span class="tip-icon">?</span>
           <div class="tip-bubble">
-            ${vscode.l10n.t("Commands are auto-executed in each cell when the grid opens. Use ×N to repeat the same command for N cells. Extra cells beyond the command list open as default terminals.")}
-            <div class="tip-example">
-              claude \xD73 + codex \xD71<br>
-              \u2192 2\xD73 Grid:<br>
-              &nbsp;&nbsp;Cell 1\u20133: claude<br>
-              &nbsp;&nbsp;Cell 4: codex<br>
-              &nbsp;&nbsp;Cell 5\u20136: default
-            </div>
+            ${vscode.l10n.t("Set shell type and startup command per cell. Use All tab for global defaults, or individual tabs for per-cell overrides.")}
           </div>
         </span>
         <span class="collapse-icon">\u25BE</span>
       </div>
       <div class="section-body">
-        <div class="cmd-list" id="cmdList"></div>
-        <div class="cmd-add-row">
-          <select class="glass-select" id="cmdPreset">
-            <option value="">${vscode.l10n.t("Add preset…")}</option>
+        <div id="cmdTabs" class="settings-tabs hidden"></div>
+        <div class="setting-row">
+          <span class="setting-label">${vscode.l10n.t("Shell")}</span>
+          <div class="font-picker" id="shellPicker">
+            <div class="font-display" id="shellDisplay">
+              <span class="font-display-text" id="shellDisplayText">${vscode.l10n.t("IDE Default")}</span>
+              <span class="font-display-arrow">\u25B2</span>
+            </div>
+            <div class="font-dropdown" id="shellDropdown"></div>
+          </div>
+        </div>
+        <div class="setting-row">
+          <span class="setting-label">${vscode.l10n.t("Command")}</span>
+          <select class="glass-select" id="cmdPreset" style="flex:1;min-width:0;">
+            <option value="">${vscode.l10n.t("Select command…")}</option>
             <option value="claude">claude</option>
             <option value="codex">codex</option>
             <option value="claude --dangerously-skip-permissions">claude --dangerously-skip-permissions</option>
             <option value="codex -s danger-full-access -a never">codex -s danger-full-access -a never</option>
+            <option value="npm run dev">npm run dev</option>
+            <option value="npm start">npm start</option>
+            <option value="npm test">npm test</option>
+            <option value="python">python</option>
+            <option value="node">node</option>
+            <option value="docker compose up">docker compose up</option>
+            <option value="ssh">ssh</option>
+            <option value="htop">htop</option>
+            <option value="__custom__">${vscode.l10n.t("Custom command…")}</option>
           </select>
         </div>
-        <div class="cmd-add-row">
-          <input class="glass-input" id="cmdCustom" placeholder="${vscode.l10n.t("Custom command…")}" />
-          <button class="stepper-btn" id="cmdAddBtn" title="${vscode.l10n.t("Add")}">+</button>
+        <div class="cmd-add-row" id="cmdCustomRow" style="display:none;">
+          <input class="glass-input" id="cmdCustom" placeholder="${vscode.l10n.t("Custom command…")}" style="flex:1;min-width:0;" />
+          <button class="stepper-btn" id="cmdApplyBtn" title="${vscode.l10n.t("Apply")}">&#10003;</button>
         </div>
+        <div class="cmd-summary-divider"></div>
+        <div id="cmdSummaryList" class="cmd-summary-list"></div>
       </div>
     </div>
 
@@ -1015,6 +1106,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       ptyInstalled: vscode.l10n.t("node-pty installed successfully!"),
       ptyInstalledHint: vscode.l10n.t("Reload the window to activate."),
       theme: vscode.l10n.t("Theme"),
+      shellAuto: vscode.l10n.t("IDE Default"),
+      shell: vscode.l10n.t("Shell"),
     })};
     var vscode = acquireVsCodeApi();
 
@@ -1191,8 +1284,142 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     themeDisplay.addEventListener('click', function(e) {
       e.stopPropagation();
       toggleDropdown(false); // close font dropdown
+      toggleShellDropdown(false); // close shell dropdown
       buildThemeDropdown();
       toggleThemeDropdown();
+    });
+
+    // ── Shell dropdown ──
+    var shellDisplay = document.getElementById('shellDisplay');
+    var shellDisplayText = document.getElementById('shellDisplayText');
+    var shellDropdownEl = document.getElementById('shellDropdown');
+    var shellDropdownOpen = false;
+    var curShellType = '';
+    var availableShells = [{ name: __i18n.shellAuto, path: '' }];
+
+    function getShellDisplayName(val) {
+      if (!val) return __i18n.shellAuto;
+      var lv = val.toLowerCase();
+      for (var i = 0; i < availableShells.length; i++) {
+        if (availableShells[i].path.toLowerCase() === lv) return availableShells[i].name;
+      }
+      // Match by filename only (e.g. "cmd.exe" matches "C:\Windows\System32\cmd.exe")
+      var base = lv.replace(/^.*[\\/\\\\]/, '');
+      for (var i = 0; i < availableShells.length; i++) {
+        var sp = availableShells[i].path.toLowerCase().replace(/^.*[\\/\\\\]/, '');
+        if (sp === base) return availableShells[i].name;
+      }
+      return val;
+    }
+
+    function toggleShellDropdown(show) {
+      shellDropdownOpen = typeof show === 'boolean' ? show : !shellDropdownOpen;
+      shellDropdownEl.classList.toggle('show', shellDropdownOpen);
+      shellDisplay.classList.toggle('open', shellDropdownOpen);
+    }
+
+    function selectShell(path) {
+      if (activeCmdTab === 'all') {
+        curShellType = path;
+        shellDisplayText.textContent = getShellDisplayName(path);
+        toggleShellDropdown(false);
+        vscode.postMessage({ type: 'setConfig', key: 'shellType', value: path });
+        // Clear all per-cell shell overrides
+        for (var k in cellOverrides) {
+          if (cellOverrides[k]) cellOverrides[k].shellType = '';
+        }
+        vscode.postMessage({ type: 'clearAllCellShells' });
+        renderCmdSummary();
+      } else {
+        var cid = parseInt(activeCmdTab, 10);
+        if (!cellOverrides[cid]) cellOverrides[cid] = { bgColor: '', fgColor: '', fontFamily: '', themeName: '', shellType: '' };
+        cellOverrides[cid].shellType = path;
+        shellDisplayText.textContent = getShellDisplayName(path);
+        toggleShellDropdown(false);
+        vscode.postMessage({ type: 'setShellForCell', cellId: cid, shellType: path });
+        updateCmdTabIndicators();
+      }
+    }
+
+    function buildShellDropdown() {
+      shellDropdownEl.innerHTML = '';
+      var currentShell = activeCmdTab === 'all' ? curShellType : (cellOverrides[parseInt(activeCmdTab, 10)] || {}).shellType || curShellType;
+      for (var i = 0; i < availableShells.length; i++) {
+        (function(shell) {
+          var opt = document.createElement('div');
+          opt.className = 'font-opt' + (currentShell === shell.path ? ' active' : '');
+          var nameEl = document.createElement('span');
+          nameEl.className = 'font-opt-name';
+          nameEl.textContent = shell.name;
+          opt.appendChild(nameEl);
+          opt.addEventListener('click', function(e) { e.stopPropagation(); selectShell(shell.path); });
+          shellDropdownEl.appendChild(opt);
+        })(availableShells[i]);
+      }
+    }
+
+    shellDisplay.addEventListener('click', function(e) {
+      e.stopPropagation();
+      toggleDropdown(false);
+      toggleThemeDropdown(false);
+      buildShellDropdown();
+      toggleShellDropdown();
+    });
+
+    // ── Per-cell command ──
+    var cmdPresetEl = document.getElementById('cmdPreset');
+    var cmdCustomRow = document.getElementById('cmdCustomRow');
+    var cmdCustomInput = document.getElementById('cmdCustom');
+    var curDefaultCommand = '';
+
+    function getCellCommand(cid) {
+      if (cid === 'all') return curDefaultCommand;
+      var ov = cellOverrides[parseInt(cid, 10)] || {};
+      return ov.startupCommand || '';
+    }
+
+    function applyCommand(val) {
+      if (activeCmdTab === 'all') {
+        curDefaultCommand = val;
+        vscode.postMessage({ type: 'setDefaultCommand', command: val });
+      } else {
+        var cid = parseInt(activeCmdTab, 10);
+        if (!cellOverrides[cid]) cellOverrides[cid] = { bgColor: '', fgColor: '', fontFamily: '', themeName: '', shellType: '', startupCommand: '' };
+        cellOverrides[cid].startupCommand = val;
+        vscode.postMessage({ type: 'setCellCommand', cellId: cid, command: val });
+        updateCmdTabIndicators();
+      }
+      renderCmdSummary();
+    }
+
+    cmdPresetEl.addEventListener('change', function() {
+      var val = this.value;
+      if (val === '__custom__') {
+        cmdCustomRow.style.display = 'flex';
+        cmdCustomInput.focus();
+        this.value = '';
+        return;
+      }
+      if (val) {
+        cmdCustomRow.style.display = 'none';
+        applyCommand(val);
+        this.value = '';
+      }
+    });
+
+    document.getElementById('cmdApplyBtn').addEventListener('click', function() {
+      var val = cmdCustomInput.value.trim();
+      if (val) {
+        applyCommand(val);
+        cmdCustomInput.value = '';
+        cmdCustomRow.style.display = 'none';
+      }
+    });
+
+    cmdCustomInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        document.getElementById('cmdApplyBtn').click();
+      }
     });
 
     // ── Font dropdown ──
@@ -1292,10 +1519,11 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     fontDisplay.addEventListener('click', function(e) {
       e.stopPropagation();
       toggleThemeDropdown(false); // close theme dropdown
+      toggleShellDropdown(false); // close shell dropdown
       buildDropdown();
       toggleDropdown();
     });
-    document.addEventListener('click', function() { toggleDropdown(false); toggleThemeDropdown(false); });
+    document.addEventListener('click', function() { toggleDropdown(false); toggleThemeDropdown(false); toggleShellDropdown(false); });
 
     // ── Color pickers ──
     function setupColor(prefix, configKey) {
@@ -1403,6 +1631,19 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       }
     }
 
+    function showCmdTabValues() {
+      if (activeCmdTab === 'all') {
+        shellDisplayText.textContent = getShellDisplayName(curShellType);
+      } else {
+        var cid = parseInt(activeCmdTab, 10);
+        var ov = cellOverrides[cid] || {};
+        shellDisplayText.textContent = getShellDisplayName(ov.shellType || curShellType);
+      }
+      cmdPresetEl.value = '';
+      cmdCustomRow.style.display = 'none';
+      renderCmdSummary();
+    }
+
     function buildSettingsTabs(total, labels) {
       settingsTabsEl.innerHTML = '';
       if (total <= 0) {
@@ -1453,107 +1694,128 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       }
     }
 
-    // ── Startup Commands ──
-    var startupCommands = []; // [{command, count}]
+    // ── Startup Commands tabs (independent) ──
+    var cmdTabsEl = document.getElementById('cmdTabs');
+    var activeCmdTab = 'all';
 
-    function calcCellRange(cmds, idx) {
-      var start = 0;
-      for (var i = 0; i < idx; i++) start += (cmds[i].count || 1);
-      var count = cmds[idx].count || 1;
-      return { start: start + 1, end: start + count };
-    }
-
-    function renderCmdList() {
-      var list = document.getElementById('cmdList');
-      list.innerHTML = '';
-      if (startupCommands.length === 0) {
-        var empty = document.createElement('div');
-        empty.className = 'cmd-empty';
-        empty.textContent = __i18n.noStartupCommands;
-        list.appendChild(empty);
+    function buildCmdTabs(total, labels) {
+      cmdTabsEl.innerHTML = '';
+      if (total <= 0) {
+        cmdTabsEl.classList.add('hidden');
+        activeCmdTab = 'all';
         return;
       }
-      for (var i = 0; i < startupCommands.length; i++) {
+      cmdTabsEl.classList.remove('hidden');
+      var allBtn = document.createElement('button');
+      allBtn.className = 'stab active';
+      allBtn.dataset.tab = 'all';
+      allBtn.textContent = __i18n.all;
+      allBtn.addEventListener('click', function() { switchCmdTab('all'); });
+      cmdTabsEl.appendChild(allBtn);
+      for (var i = 0; i < total; i++) {
         (function(idx) {
-          var sc = startupCommands[idx];
-          var range = calcCellRange(startupCommands, idx);
-          var item = document.createElement('div');
-          item.className = 'cmd-item';
-
-          var rangeEl = document.createElement('span');
-          rangeEl.className = 'cmd-item-range';
-          rangeEl.textContent = range.start === range.end
-            ? range.start + '.'
-            : range.start + '-' + range.end + '.';
-          item.appendChild(rangeEl);
-
-          var text = document.createElement('span');
-          text.className = 'cmd-item-text';
-          text.textContent = sc.command;
-          text.title = sc.command;
-          item.appendChild(text);
-
-          var countWrap = document.createElement('div');
-          countWrap.className = 'cmd-count';
-          var minusBtn = document.createElement('button');
-          minusBtn.className = 'cmd-count-btn';
-          minusBtn.textContent = '\\u2212';
-          minusBtn.addEventListener('click', function() {
-            if (sc.count > 1) {
-              vscode.postMessage({ type: 'updateCommandCount', index: idx, count: sc.count - 1 });
-            }
-          });
-          countWrap.appendChild(minusBtn);
-          var countVal = document.createElement('span');
-          countVal.className = 'cmd-count-val';
-          countVal.textContent = sc.count;
-          countWrap.appendChild(countVal);
-          var plusBtn = document.createElement('button');
-          plusBtn.className = 'cmd-count-btn';
-          plusBtn.textContent = '+';
-          plusBtn.addEventListener('click', function() {
-            vscode.postMessage({ type: 'updateCommandCount', index: idx, count: sc.count + 1 });
-          });
-          countWrap.appendChild(plusBtn);
-          item.appendChild(countWrap);
-
-          var del = document.createElement('button');
-          del.className = 'cmd-item-del';
-          del.textContent = '\\u00d7';
-          del.title = __i18n.remove;
-          del.addEventListener('click', function() {
-            vscode.postMessage({ type: 'removeStartupCommand', index: idx });
-          });
-          item.appendChild(del);
-          list.appendChild(item);
+          var btn = document.createElement('button');
+          btn.className = 'stab';
+          btn.dataset.tab = String(idx);
+          btn.textContent = labels[idx] || String(idx + 1);
+          btn.addEventListener('click', function() { switchCmdTab(String(idx)); });
+          cmdTabsEl.appendChild(btn);
         })(i);
       }
+      activeCmdTab = 'all';
+      updateCmdTabIndicators();
     }
 
-    document.getElementById('cmdPreset').addEventListener('change', function() {
-      var val = this.value;
-      if (val) {
-        vscode.postMessage({ type: 'addStartupCommand', command: val });
-        this.value = '';
+    function switchCmdTab(tab) {
+      activeCmdTab = tab;
+      var btns = cmdTabsEl.querySelectorAll('.stab');
+      for (var i = 0; i < btns.length; i++) {
+        btns[i].classList.toggle('active', btns[i].dataset.tab === tab);
       }
-    });
+      showCmdTabValues();
+    }
 
-    document.getElementById('cmdAddBtn').addEventListener('click', function() {
-      var input = document.getElementById('cmdCustom');
-      var val = input.value.trim();
-      if (val) {
-        vscode.postMessage({ type: 'addStartupCommand', command: val });
-        input.value = '';
+    function updateCmdTabIndicators() {
+      renderCmdSummary();
+    }
+
+    function getCellLabel(idx) {
+      var btns = cmdTabsEl.querySelectorAll('.stab');
+      for (var j = 0; j < btns.length; j++) {
+        if (btns[j].dataset.tab === String(idx)) return btns[j].textContent;
       }
-    });
+      return String(idx + 1);
+    }
 
-    document.getElementById('cmdCustom').addEventListener('keydown', function(e) {
-      if (e.key === 'Enter') {
-        document.getElementById('cmdAddBtn').click();
+    function renderCmdSummary() {
+      var list = document.getElementById('cmdSummaryList');
+      list.innerHTML = '';
+      var items = [];
+      // Global defaults
+      if (curShellType || curDefaultCommand) {
+        items.push({
+          label: __i18n.all,
+          shell: curShellType ? getShellDisplayName(curShellType) : '',
+          cmd: curDefaultCommand || '',
+          key: 'all'
+        });
       }
-    });
-
-    renderCmdList();
+      // Per-cell overrides
+      var total = cmdTabsEl.querySelectorAll('.stab:not([data-tab="all"])').length;
+      for (var i = 0; i < total; i++) {
+        var ov = cellOverrides[i] || {};
+        if (ov.shellType || ov.startupCommand) {
+          items.push({
+            label: getCellLabel(i),
+            shell: ov.shellType ? getShellDisplayName(ov.shellType) : '',
+            cmd: ov.startupCommand || '',
+            key: String(i)
+          });
+        }
+      }
+      if (items.length === 0) return;
+      for (var k = 0; k < items.length; k++) {
+        (function(item) {
+          var row = document.createElement('div');
+          row.className = 'cmd-summary-item';
+          var lbl = document.createElement('span');
+          lbl.className = 'cmd-summary-label';
+          lbl.textContent = item.label;
+          row.appendChild(lbl);
+          var txt = document.createElement('span');
+          txt.className = 'cmd-summary-text';
+          var parts = [];
+          if (item.shell) parts.push(item.shell);
+          if (item.cmd) parts.push(item.cmd);
+          txt.textContent = parts.join(' \u00b7 ');
+          txt.title = parts.join(' · ');
+          row.appendChild(txt);
+          var del = document.createElement('button');
+          del.className = 'cmd-summary-del';
+          del.textContent = '\u00d7';
+          del.addEventListener('click', function() {
+            if (item.key === 'all') {
+              curShellType = '';
+              curDefaultCommand = '';
+              vscode.postMessage({ type: 'setConfig', key: 'shellType', value: '' });
+              vscode.postMessage({ type: 'setDefaultCommand', command: '' });
+            } else {
+              var cid = parseInt(item.key, 10);
+              if (cellOverrides[cid]) {
+                cellOverrides[cid].shellType = '';
+                cellOverrides[cid].startupCommand = '';
+              }
+              vscode.postMessage({ type: 'setShellForCell', cellId: cid, shellType: '' });
+              vscode.postMessage({ type: 'setCellCommand', cellId: cid, command: '' });
+            }
+            showCmdTabValues();
+            renderCmdSummary();
+          });
+          row.appendChild(del);
+          list.appendChild(row);
+        })(items[k]);
+      }
+    }
 
     // ── Projects ──
     var projects = [];
@@ -1798,21 +2060,24 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         curBg = msg.bgColor || '';
         curFg = msg.fgColor || '';
         curThemeName = msg.colorTheme || '';
+        curShellType = msg.shellType || '';
+        curDefaultCommand = msg.defaultCommand || '';
         themeNames = msg.themeNames || [''];
+        availableShells = msg.availableShells || [{ name: __i18n.shellAuto, path: '' }];
         customFontNames = msg.customFonts || [];
-        startupCommands = msg.startupCommands || [];
         projects = msg.projects || [];
         presets = msg.presets || [];
         projectPresetsMap = msg.projectPresets || {};
         workspacePath = msg.workspacePath || '';
         cellOverrides = msg.cellOverrides || {};
         updateSettingsUI();
-        renderCmdList();
         renderProjectList();
         renderPresetDropdown();
         var gridTotal = (msg.gridRows || 0) * (msg.gridCols || 0);
         buildBroadcastTargets(gridTotal, msg.cellLabels || []);
         buildSettingsTabs(gridTotal, msg.cellLabels || []);
+        buildCmdTabs(gridTotal, msg.cellLabels || []);
+        showCmdTabValues();
         applySectionStates(msg.sectionStates || {});
       }
     });

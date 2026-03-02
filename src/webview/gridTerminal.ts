@@ -231,10 +231,19 @@ for (let i = 0; i < total; i++) {
     if (e.ctrlKey && e.type === "keydown" && e.key === "c") {
       const sel = terminal.getSelection();
       if (sel) {
-        navigator.clipboard.writeText(sel).catch(() => {});
-        terminal.clearSelection();
+        navigator.clipboard.writeText(sel).then(() => {
+          terminal.focus();
+        }).catch(() => {});
         return false;
       }
+    }
+    // Let VS Code handle F-keys and common shortcuts
+    if (e.type === "keydown") {
+      // F1~F12
+      if (e.key.match(/^F\d{1,2}$/)) return false;
+      // Ctrl+Shift+P, Ctrl+P, Ctrl+Shift+`, Ctrl+B, Ctrl+J, Ctrl+,
+      if (e.ctrlKey && e.shiftKey && (e.key === "P" || e.key === "p" || e.key === "`")) return false;
+      if (e.ctrlKey && !e.shiftKey && (e.key === "p" || e.key === "b" || e.key === "j" || e.key === ",")) return false;
     }
     return true;
   });
@@ -268,16 +277,22 @@ ctxMenu.addEventListener("click", (e: Event) => {
     case "copy": {
       const sel = cells[ctxTargetId]?.terminal.getSelection();
       if (sel) {
-        navigator.clipboard.writeText(sel).catch(() => {});
+        const tid = ctxTargetId;
+        navigator.clipboard.writeText(sel).then(() => {
+          cells[tid]?.terminal.focus();
+        }).catch(() => {});
       }
       break;
     }
-    case "paste":
+    case "paste": {
+      const tid = ctxTargetId;
       navigator.clipboard.readText().then((text) => {
-        if (text && ctxTargetId >= 0) {
-          vscode.postMessage({ type: "input", id: ctxTargetId, data: text });
+        if (text && tid >= 0) {
+          vscode.postMessage({ type: "input", id: tid, data: text });
+          cells[tid]?.terminal.focus();
         }
       }).catch(() => {});
+    }
       break;
     case "clear":
       vscode.postMessage({ type: "clearTerminal", id: ctxTargetId });

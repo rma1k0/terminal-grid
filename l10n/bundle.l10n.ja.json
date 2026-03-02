@@ -40,6 +40,7 @@
   "IDE Default": "IDE デフォルト",
   "Reset to IDE Default": "IDE デフォルトにリセット",
   "Custom command…": "カスタムコマンド…",
+  "Select command…": "コマンドを選択…",
   "Preset name…": "プリセット名…",
   "Select preset…": "プリセットを選択…",
   "Type command…": "コマンドを入力…",
@@ -72,5 +73,11 @@
   "Reload the window to activate.": "ウィンドウをリロードして有効にしてください。",
   "node-pty installed successfully!": "node-ptyのインストールが完了しました！",
   "Copy": "コピー",
-  "Theme": "テーマ"
+  "Theme": "テーマ",
+  "Shell": "シェル",
+  "Auto": "自動",
+  "Command": "コマンド",
+  "Startup command…": "起動コマンド…",
+  "Set shell type and startup command per cell. Use All tab for global defaults, or individual tabs for per-cell overrides.": "セルごとにシェルと起動コマンドを設定します。全体タブはデフォルト、個別タブはセルごとのオーバーライドです。",
+  "Apply": "適用"
 }

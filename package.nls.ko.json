@@ -21,5 +21,6 @@
   "config.backgroundColor": "터미널 배경색 오버라이드 (빈값 = IDE 테마)",
   "config.foregroundColor": "터미널 전경색 오버라이드 (빈값 = IDE 테마)",
   "config.colorTheme": "터미널 컬러 테마 (빈값 = IDE 테마)",
+  "config.shellType": "기본 쉘 타입 (빈값 = OS/환경에서 자동 감지)",
   "config.apiPort": "MCP 브릿지 HTTP 포트 (0 = 비활성화). 재시작 필요."
 }
