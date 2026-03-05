@@ -6,9 +6,55 @@
   <img src="https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/icon.png" width="128" alt="Terminal Grid">
 </p>
 
-> Mehrere Terminals in einem einzigen Editor-Tab — tmux-ähnliche Panels mit xterm.js + node-pty
+> Ein tmux-artiges Terminal-Raster für VS Code — teilen, zusammenführen, übertragen und KI Ihre Terminals über MCP steuern lassen.
 
 ![Terminal Grid Screenshot](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/screenshot.png)
+
+## MCP-Integration — KI-gesteuerte Terminal-Kontrolle
+
+Terminal Grid enthält einen integrierten [MCP (Model Context Protocol)](https://modelcontextprotocol.io/)-Server. KI-Agenten wie Claude Code oder Codex können Ihr Raster sehen, Befehle in jeder Zelle ausführen und die Ausgabe lesen — alles in natürlicher Sprache.
+
+![MCP Demo](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-mcp.gif)
+
+**Ein Prompt, drei Terminals gleichzeitig:**
+
+> "Führe ls in Zelle 2 aus, zeige git log in Zelle 3 und starte git status in Zelle 4"
+
+Die KI ruft `get_grid_info` auf, um das Layout zu erkennen, dann `send_to_cell` für jedes Ziel — Befehle werden gleichzeitig im gesamten Raster ausgeführt.
+
+### Einrichtung
+
+1. `Ctrl+Shift+P` → **Terminal Grid: Copy MCP Config**
+2. In die MCP-Client-Einstellungen einfügen (z.B. `~/.claude/settings.json`)
+
+Das war's — der MCP-Server registriert sich automatisch bei Aktivierung der Erweiterung.
+
+### MCP-Werkzeuge
+
+| Werkzeug | Beschreibung |
+|----------|-------------|
+| `get_grid_info` | Rasterabmessungen, Zellenanzahl und Labels abrufen |
+| `send_to_cell` | Text/Befehle an eine Zelle senden |
+| `read_cell` | Terminal-Ausgabe einer Zelle lesen |
+| `broadcast` | An alle Zellen senden |
+
+### Konfigurationsbeispiel
+
+```json
+{
+  "mcpServers": {
+    "terminal-grid": {
+      "command": "node",
+      "args": ["/path/to/extension/mcp-server.js"],
+      "env": { "TERMINAL_GRID_PORT": "7890" }
+    }
+  }
+}
+```
+
+### LLM CLI-Unterstützung
+
+Führen Sie LLM-CLI-Tools (Claude Code, Codex, etc.) direkt in Rasterzellen aus. Terminal Grid erkennt automatisch LLM-TUI-Anwendungen und sendet die richtigen Tastatursequenzen (CSI u / Kitty-Tastaturprotokoll) — Enter, Tab und Pfeiltasten funktionieren einfach.
 
 ## Funktionen
 
@@ -18,9 +64,13 @@ Bis zu 4x5 (20) Terminals in einem anpassbaren Raster. Ziehen Sie Zellgrenzen zu
 
 ![Grid Layout](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-grid-open.gif)
 
+### Zellen-Zusammenführung
+
+Führen Sie benachbarte Zellen zu einem größeren Terminal zusammen. Wählen Sie Zellen in der Rastervorschau in der Seitenleiste, klicken Sie auf Merge und öffnen Sie das Raster — der zusammengeführte Bereich wird zu einem großen Panel. Nützlich, um dem Hauptterminal mehr Platz zu geben, während kleine Zellen zur Überwachung erhalten bleiben.
+
 ### Startbefehle & Vorlagen
 
-Befehle beim Erstellen der Terminals automatisch ausführen. Gesamte Rasterkonfigurationen als Vorlagen speichern — mit automatischem Laden pro Projekt.
+Befehle beim Erstellen der Terminals automatisch ausführen. Gesamte Rasterkonfigurationen (Größe, zusammengeführte Bereiche, Farben, Befehle) als Vorlagen speichern — mit automatischem Laden pro Projekt.
 
 ![Startup Commands](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-startup-commands.gif)
 
@@ -32,13 +82,9 @@ Individuelle Hintergrundfarbe, Textfarbe und Schrift pro Zelle. Auf alle Zellen 
 
 ### Broadcast
 
-Befehle an alle Terminals oder ausgewählte Zellen gleichzeitig senden. Unterstützt CSI u (Kitty-Tastaturprotokoll) für LLM-CLI-Tools wie Claude Code und Codex.
+Befehle an alle Terminals oder ausgewählte Zellen gleichzeitig senden.
 
 ![Broadcast](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-broadcast.gif)
-
-### MCP-Server & Agent API
-
-Integrierte HTTP-Bridge für LLM-Orchestrierung. Terminals programmatisch von Claude Code, Codex oder jedem MCP-Client steuern.
 
 ### Weitere Funktionen
 
@@ -70,31 +116,13 @@ Integrierte HTTP-Bridge für LLM-Orchestrierung. Terminals programmatisch von Cl
 
 | Einstellung | Standard | Beschreibung |
 |-------------|----------|-------------|
-| `terminalGrid.defaultRows` | `2` | Standard-Zeilenanzahl (1–4) |
-| `terminalGrid.defaultCols` | `3` | Standard-Spaltenanzahl (1–5) |
-| `terminalGrid.zoomPercent` | `100` | Globaler Schrift-Zoom (50–300%) |
+| `terminalGrid.defaultRows` | `2` | Standard-Zeilenanzahl (1-4) |
+| `terminalGrid.defaultCols` | `3` | Standard-Spaltenanzahl (1-5) |
+| `terminalGrid.zoomPercent` | `100` | Globaler Schrift-Zoom (50-300%) |
 | `terminalGrid.fontFamily` | `""` | Schrift-Überschreibung (leer = IDE-Theme) |
 | `terminalGrid.backgroundColor` | `""` | Hintergrundfarbe (leer = IDE-Theme) |
 | `terminalGrid.foregroundColor` | `""` | Textfarbe (leer = IDE-Theme) |
 | `terminalGrid.apiPort` | `7890` | MCP HTTP-Bridge-Port (0 = deaktiviert) |
-
-## MCP-Integration
-
-Terminal Grid enthält einen integrierten MCP-Server (Model Context Protocol) für LLM-Orchestrierung.
-
-### Einrichtung
-
-1. `Ctrl+Shift+P` → **Terminal Grid: Copy MCP Config**
-2. In die MCP-Client-Einstellungen einfügen (z.B. `~/.claude/settings.json`)
-
-### MCP-Werkzeuge
-
-| Werkzeug | Beschreibung |
-|----------|-------------|
-| `get_grid_info` | Rasterabmessungen, Zellenanzahl und Labels abrufen |
-| `send_to_cell` | Text an eine Zelle senden (`\r` zum Ausführen) |
-| `read_cell` | Terminal-Ausgabe einer Zelle lesen |
-| `broadcast` | An alle Zellen senden |
 
 ## Agent API
 
@@ -114,7 +142,6 @@ const output = await vscode.commands.executeCommand('terminalGrid.readCell', 0, 
 ## Voraussetzungen
 
 - VS Code 1.80.0+
-- node-pty (automatische Installation beim ersten Start)
 
 ## Lizenz
 

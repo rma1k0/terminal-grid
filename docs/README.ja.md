@@ -6,9 +6,55 @@
   <img src="https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/icon.png" width="128" alt="Terminal Grid">
 </p>
 
-> 1つのエディタタブに複数のターミナルを — xterm.js + node-pty ベースの tmux スタイルペイン
+> VS Code用tmuxスタイルのターミナルグリッド — 分割、結合、ブロードキャスト、そしてMCPによるAIターミナル制御。
 
 ![Terminal Grid Screenshot](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/screenshot.png)
+
+## MCP統合 — AIによるターミナル制御
+
+Terminal Gridには[MCP（Model Context Protocol）](https://modelcontextprotocol.io/)サーバーが組み込まれています。Claude CodeやCodexなどのAIエージェントがグリッドを確認し、任意のセルでコマンドを実行し、出力を読み取ることができます — すべて自然言語で。
+
+![MCP Demo](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-mcp.gif)
+
+**1つのプロンプトで3つのターミナルを同時に：**
+
+> 「セル2でlsを実行、セル3でgit logを表示、セル4でgit statusを実行して」
+
+AIが`get_grid_info`でレイアウトを把握し、各ターゲットに`send_to_cell`でコマンドを送信 — グリッド全体で同時に実行されます。
+
+### セットアップ
+
+1. `Ctrl+Shift+P` → **Terminal Grid: Copy MCP Config**
+2. MCPクライアント設定に貼り付け（例：`~/.claude/settings.json`）
+
+これだけです — 拡張機能の有効化時にMCPサーバーが自動登録されます。
+
+### MCPツール
+
+| ツール | 説明 |
+|--------|------|
+| `get_grid_info` | グリッドサイズ、セル数、ラベルを取得 |
+| `send_to_cell` | 指定セルにテキスト/コマンドを送信 |
+| `read_cell` | セルのターミナル出力を読み取り |
+| `broadcast` | すべてのセルに一括送信 |
+
+### 設定例
+
+```json
+{
+  "mcpServers": {
+    "terminal-grid": {
+      "command": "node",
+      "args": ["/path/to/extension/mcp-server.js"],
+      "env": { "TERMINAL_GRID_PORT": "7890" }
+    }
+  }
+}
+```
+
+### LLM CLIサポート
+
+LLM CLIツール（Claude Code、Codexなど）をグリッドセル内で直接実行できます。Terminal GridはLLM TUIアプリを自動検出し、正しいキーシーケンス（CSI u / Kittyキーボードプロトコル）を送信します — Enter、Tab、矢印キーがそのまま動作します。
 
 ## 機能
 
@@ -18,9 +64,13 @@
 
 ![Grid Layout](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-grid-open.gif)
 
+### セル結合
+
+隣接するセルを1つの大きなターミナルに結合。サイドバーのグリッドプレビューでセルを選択し、Mergeをクリックしてグリッドを開くと、結合された領域が1つの大きなペインになります。メインターミナルに広いスペースを確保しながら、モニタリング用の小さなセルを維持するのに便利です。
+
 ### 起動コマンド & プリセット
 
-ターミナル作成時にコマンドを自動実行。グリッド全体の構成をプリセットとして保存 — プロジェクト別の自動読み込みに対応。
+ターミナル作成時にコマンドを自動実行。グリッド全体の構成（サイズ、結合領域、色、コマンド）をプリセットとして保存 — プロジェクト別の自動読み込みに対応。
 
 ![Startup Commands](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-startup-commands.gif)
 
@@ -32,13 +82,9 @@
 
 ### ブロードキャスト入力
 
-すべてのターミナルまたは選択したセルにコマンドを一括送信。Claude Code、Codex などの LLM CLI ツール向けに CSI u（Kitty キーボードプロトコル）をサポート。
+すべてのターミナルまたは選択したセルにコマンドを一括送信。
 
 ![Broadcast](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-broadcast.gif)
-
-### MCPサーバー & Agent API
-
-LLMオーケストレーション用の組み込みHTTPブリッジ。Claude Code、Codex、または任意のMCPクライアントからプログラムでターミナルを制御。
 
 ### その他の機能
 
@@ -70,31 +116,13 @@ LLMオーケストレーション用の組み込みHTTPブリッジ。Claude Cod
 
 | 設定 | デフォルト | 説明 |
 |------|------------|------|
-| `terminalGrid.defaultRows` | `2` | デフォルト行数 (1–4) |
-| `terminalGrid.defaultCols` | `3` | デフォルト列数 (1–5) |
-| `terminalGrid.zoomPercent` | `100` | グローバルフォントズーム (50–300%) |
+| `terminalGrid.defaultRows` | `2` | デフォルト行数 (1-4) |
+| `terminalGrid.defaultCols` | `3` | デフォルト列数 (1-5) |
+| `terminalGrid.zoomPercent` | `100` | グローバルフォントズーム (50-300%) |
 | `terminalGrid.fontFamily` | `""` | フォント上書き（空 = IDEテーマ） |
 | `terminalGrid.backgroundColor` | `""` | 背景色上書き（空 = IDEテーマ） |
 | `terminalGrid.foregroundColor` | `""` | 前景色上書き（空 = IDEテーマ） |
 | `terminalGrid.apiPort` | `7890` | MCP HTTPブリッジポート（0 = 無効） |
-
-## MCP統合
-
-Terminal GridにはLLMオーケストレーション用のMCP（Model Context Protocol）サーバーが組み込まれています。
-
-### セットアップ
-
-1. `Ctrl+Shift+P` → **Terminal Grid: Copy MCP Config**
-2. MCPクライアント設定に貼り付け（例：`~/.claude/settings.json`）
-
-### MCPツール
-
-| ツール | 説明 |
-|--------|------|
-| `get_grid_info` | グリッドサイズ、セル数、ラベルを取得 |
-| `send_to_cell` | 指定セルにテキストを送信（`\r`で実行） |
-| `read_cell` | セルのターミナル出力を読み取り |
-| `broadcast` | すべてのセルに一括送信 |
 
 ## Agent API
 
@@ -114,7 +142,6 @@ const output = await vscode.commands.executeCommand('terminalGrid.readCell', 0, 
 ## 要件
 
 - VS Code 1.80.0+
-- node-pty（初回使用時に自動インストール案内）
 
 ## ライセンス
 

@@ -293,6 +293,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
             fontFamily: string; bgColor: string; fgColor: string;
             colorTheme?: string; shellType?: string; defaultCommand?: string;
             defaultSteps?: unknown[]; cellStepsOverrides?: Record<number, Record<string, unknown>>;
+            mergedRegions?: unknown[];
           } | undefined;
           if (!preset) break;
           const cfg = vscode.workspace.getConfiguration("terminalGrid");
@@ -323,6 +324,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
             }
             await this._context.globalState.update("cellOverrides", cur);
           }
+          // Restore merge regions
+          await this._context.globalState.update("mergedRegions", preset.mergedRegions || []);
           // Auto-open grid with loaded preset dimensions
           TerminalGridPanel.createOrShow(this._context, preset.rows, preset.cols);
           this.sendConfig();
@@ -432,6 +435,36 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
           await this._context.globalState.update("cellOverrides", overrides);
           break;
         }
+        case "saveMergeRegions": {
+          const regions = msg.regions || [];
+          await this._context.globalState.update("mergedRegions", regions);
+          // Excel-style: clear settings for hidden (absorbed) cells
+          const gridCols = vscode.workspace.getConfiguration("terminalGrid").get<number>("defaultCols", 3);
+          const hidden = new Set<number>();
+          for (const m of regions as {startRow: number; startCol: number; rowSpan: number; colSpan: number}[]) {
+            for (let r = m.startRow; r < m.startRow + m.rowSpan; r++) {
+              for (let c = m.startCol; c < m.startCol + m.colSpan; c++) {
+                if (r === m.startRow && c === m.startCol) continue;
+                hidden.add(r * gridCols + c);
+              }
+            }
+          }
+          if (hidden.size > 0) {
+            const overrides = this._context.globalState.get<Record<string, unknown>>("cellOverrides", {}) as Record<string, unknown>;
+            const labels = this._context.globalState.get<string[]>("cellLabels", []);
+            let dirty = false;
+            for (const id of hidden) {
+              if (overrides[String(id)]) { delete overrides[String(id)]; dirty = true; }
+              if (labels[id]) { labels[id] = ""; dirty = true; }
+            }
+            if (dirty) {
+              await this._context.globalState.update("cellOverrides", overrides);
+              await this._context.globalState.update("cellLabels", labels);
+            }
+          }
+          this.sendConfig();
+          break;
+        }
         case "saveSectionStates": {
           await this._context.globalState.update("sectionStates", msg.states);
           break;
@@ -495,6 +528,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       defaultCommand: this._context.globalState.get<string>("defaultCommand", ""),
       defaultSteps: this._context.globalState.get<unknown[]>("defaultSteps", []),
       cellStepsOverrides: this._context.globalState.get<Record<number, Record<string, unknown>>>("cellOverrides", {}),
+      mergedRegions: this._context.globalState.get<unknown[]>("mergedRegions", []),
     };
     const presets = this._context.globalState.get<Record<string, unknown>[]>("presets", []);
     const existIdx = presets.findIndex((p) => (p as {name: string}).name === name);
@@ -588,6 +622,21 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       workspacePath: workspacePath,
       gridRows: panel?.getRows() ?? 0,
       gridCols: panel?.getCols() ?? 0,
+      mergedRegions: this._context.globalState.get<unknown[]>("mergedRegions", []),
+      hiddenCells: (() => {
+        const mr = this._context.globalState.get<{startRow: number; startCol: number; rowSpan: number; colSpan: number}[]>("mergedRegions", []);
+        const gc = cfg.get<number>("defaultCols", 3);
+        const h: number[] = [];
+        for (const m of mr) {
+          for (let r = m.startRow; r < m.startRow + m.rowSpan; r++) {
+            for (let c = m.startCol; c < m.startCol + m.colSpan; c++) {
+              if (r === m.startRow && c === m.startCol) continue;
+              h.push(r * gc + c);
+            }
+          }
+        }
+        return h;
+      })(),
     });
   }
 
@@ -684,6 +733,54 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     }
     .btn-group { display: flex; flex-direction: column; gap: 8px; }
     .btn-icon { font-size: 15px; opacity: .75; line-height: 1; }
+
+    /* ── Cell Merge preview ── */
+    .merge-row {
+      display: flex; align-items: flex-start; gap: 8px;
+      justify-content: center;
+      margin-bottom: 8px;
+      overflow: hidden;
+    }
+    .merge-grid {
+      display: inline-grid; gap: 3px; user-select: none;
+      border: 1px solid rgba(255,255,255,.06); border-radius: 8px; padding: 6px;
+      background: rgba(0,0,0,.15);
+      min-width: 0; flex-shrink: 1;
+    }
+    .merge-cell {
+      min-width: 22px; min-height: 22px;
+      background: rgba(255,255,255,.04);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 4px; cursor: crosshair;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 8px; opacity: .5; transition: all .12s ease;
+    }
+    .merge-cell.selecting {
+      background: linear-gradient(135deg,rgba(0,127,212,.35),rgba(0,200,255,.20));
+      border-color: rgba(0,160,230,.5); opacity: 1;
+    }
+    .merge-cell.merged {
+      background: linear-gradient(135deg,rgba(100,200,100,.20),rgba(60,180,60,.12));
+      border-color: rgba(100,200,100,.4); opacity: 1;
+    }
+    .merge-cell.merged-origin { font-size: 9px; font-weight: 600; opacity: .8; }
+    .merge-side {
+      display: flex; flex-direction: column; gap: 4px; flex-shrink: 0;
+    }
+    .merge-side .glass-btn { font-size: 9px; padding: 5px 6px; min-width: 0; width: auto; }
+    .merge-bottom {
+      display: flex; align-items: center; justify-content: center; gap: 12px;
+      margin-bottom: 12px;
+    }
+    .merge-legend {
+      display: flex; gap: 10px; font-size: 9px; opacity: .5;
+    }
+    .merge-legend-item { display: flex; align-items: center; gap: 3px; }
+    .merge-legend-swatch {
+      width: 8px; height: 8px; border-radius: 2px; border: 1px solid rgba(255,255,255,.12);
+    }
+    .merge-legend-swatch.sel { background: linear-gradient(135deg,rgba(0,127,212,.35),rgba(0,200,255,.20)); }
+    .merge-legend-swatch.mrg { background: linear-gradient(135deg,rgba(100,200,100,.20),rgba(60,180,60,.12)); }
 
     /* ── Settings controls ── */
     .setting-row {
@@ -1060,7 +1157,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         <span class="tip-wrap">
           <span class="tip-icon">?</span>
           <div class="tip-bubble">
-            ${vscode.l10n.t("Hover to select the desired rows×cols size. Supports up to 4×5 (20 cells). Grid opens as an editor tab, each cell is an independent terminal.")}
+            ${vscode.l10n.t("Hover to select the desired rows×cols size. Supports up to 4×5 (20 cells). Grid opens as an editor tab, each cell is an independent terminal. Drag cells below to merge them into one larger terminal.")}
           </div>
         </span>
         <span class="collapse-icon">\u25BE</span>
@@ -1070,6 +1167,20 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
           <div class="grid-selector" id="gridSelector"></div>
         </div>
         <div class="size-label" id="sizeLabel"></div>
+        <div class="merge-row">
+          <div class="merge-grid" id="mergeGrid"></div>
+          <div class="merge-side">
+            <button class="glass-btn" id="mergeBtn" disabled>${vscode.l10n.t("Merge")}</button>
+            <button class="glass-btn" id="unmergeBtn" disabled>${vscode.l10n.t("Unmerge")}</button>
+            <button class="glass-btn" id="mergeClearBtn">${vscode.l10n.t("Clear")}</button>
+          </div>
+        </div>
+        <div class="merge-bottom">
+          <div class="merge-legend">
+            <div class="merge-legend-item"><div class="merge-legend-swatch sel"></div> ${vscode.l10n.t("Selection")}</div>
+            <div class="merge-legend-item"><div class="merge-legend-swatch mrg"></div> ${vscode.l10n.t("Merged")}</div>
+          </div>
+        </div>
         <button class="glass-btn primary" id="openGridBtn">
           <span class="btn-icon">&#9654;</span> ${vscode.l10n.t("Open Grid")}
         </button>
@@ -1371,6 +1482,208 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     document.getElementById('reloadBtn').addEventListener('click', function() {
       vscode.postMessage({ type: 'reload' });
     });
+
+    // ── Cell Merge preview grid ──
+    var mergeGridEl = document.getElementById('mergeGrid');
+    var mergeBtn = document.getElementById('mergeBtn');
+    var unmergeBtn = document.getElementById('unmergeBtn');
+    var mergeClearBtn = document.getElementById('mergeClearBtn');
+    var mergeCells = [];       // { el, row, col }
+    var mergedRegions = [];    // { startRow, startCol, rowSpan, colSpan }
+    var mergeSelStart = null;  // { row, col }
+    var mergeSelEnd = null;    // { row, col }
+    var mergeDragging = false;
+    var mergeRows = selectedRows, mergeCols = selectedCols;
+
+    function buildMergeGrid() {
+      mergeRows = selectedRows;
+      mergeCols = selectedCols;
+      mergeGridEl.innerHTML = '';
+      mergeCells = [];
+      mergeGridEl.style.gridTemplateColumns = 'repeat(' + mergeCols + ', 1fr)';
+      for (var r = 0; r < mergeRows; r++) {
+        for (var c = 0; c < mergeCols; c++) {
+          (function(row, col) {
+            var cell = document.createElement('div');
+            cell.className = 'merge-cell';
+            cell.textContent = String(row * mergeCols + col + 1);
+            cell.addEventListener('mousedown', function(e) {
+              e.preventDefault();
+              mergeDragging = true;
+              mergeSelStart = { row: row, col: col };
+              mergeSelEnd = { row: row, col: col };
+              renderMergeGrid();
+            });
+            cell.addEventListener('mouseenter', function() {
+              if (mergeDragging && mergeSelStart) {
+                mergeSelEnd = { row: row, col: col };
+                renderMergeGrid();
+              }
+            });
+            mergeGridEl.appendChild(cell);
+            mergeCells.push({ el: cell, row: row, col: col });
+          })(r, c);
+        }
+      }
+      renderMergeGrid();
+    }
+
+    document.addEventListener('mouseup', function() {
+      if (mergeDragging) {
+        mergeDragging = false;
+        renderMergeGrid();
+      }
+    });
+
+    function getSelectionRect() {
+      if (!mergeSelStart || !mergeSelEnd) return null;
+      var r1 = Math.min(mergeSelStart.row, mergeSelEnd.row);
+      var r2 = Math.max(mergeSelStart.row, mergeSelEnd.row);
+      var c1 = Math.min(mergeSelStart.col, mergeSelEnd.col);
+      var c2 = Math.max(mergeSelStart.col, mergeSelEnd.col);
+      if (r1 === r2 && c1 === c2) return null; // single cell = no selection
+      return { r1: r1, r2: r2, c1: c1, c2: c2 };
+    }
+
+    function getMergedRegionAt(row, col) {
+      for (var i = 0; i < mergedRegions.length; i++) {
+        var m = mergedRegions[i];
+        if (row >= m.startRow && row < m.startRow + m.rowSpan &&
+            col >= m.startCol && col < m.startCol + m.colSpan) {
+          return m;
+        }
+      }
+      return null;
+    }
+
+    // Returns { absorbed: [indices], conflicts: [indices] }
+    // absorbed = fully inside selection → will be removed on merge
+    // conflicts = partially overlapping → blocks merge
+    function checkSelectionMergeCompat(rect) {
+      var absorbed = [], conflicts = [];
+      for (var i = 0; i < mergedRegions.length; i++) {
+        var m = mergedRegions[i];
+        var mR1 = m.startRow, mR2 = m.startRow + m.rowSpan - 1;
+        var mC1 = m.startCol, mC2 = m.startCol + m.colSpan - 1;
+        var overlaps = !(mR2 < rect.r1 || mR1 > rect.r2 || mC2 < rect.c1 || mC1 > rect.c2);
+        if (!overlaps) continue;
+        var fullyContained = mR1 >= rect.r1 && mR2 <= rect.r2 && mC1 >= rect.c1 && mC2 <= rect.c2;
+        if (fullyContained) { absorbed.push(i); } else { conflicts.push(i); }
+      }
+      return { absorbed: absorbed, conflicts: conflicts };
+    }
+
+    function renderMergeGrid() {
+      var sel = getSelectionRect();
+      // Check if single selected cell is inside a merged region (for unmerge)
+      var clickedRegion = null;
+      if (!sel && mergeSelStart && !mergeDragging) {
+        clickedRegion = getMergedRegionAt(mergeSelStart.row, mergeSelStart.col);
+      }
+
+      for (var i = 0; i < mergeCells.length; i++) {
+        var mc = mergeCells[i];
+        var el = mc.el;
+        el.className = 'merge-cell';
+        // Explicit grid position for every cell to prevent auto-placement issues
+        el.style.gridColumn = String(mc.col + 1);
+        el.style.gridRow = String(mc.row + 1);
+        el.style.display = '';
+        el.textContent = String(mc.row * mergeCols + mc.col + 1);
+
+        // Mark merged cells
+        var region = getMergedRegionAt(mc.row, mc.col);
+        if (region) {
+          if (mc.row === region.startRow && mc.col === region.startCol) {
+            el.classList.add('merged', 'merged-origin');
+            el.style.gridColumn = (mc.col + 1) + ' / span ' + region.colSpan;
+            el.style.gridRow = (mc.row + 1) + ' / span ' + region.rowSpan;
+            var cellNums = [];
+            for (var rr = region.startRow; rr < region.startRow + region.rowSpan; rr++) {
+              for (var cc = region.startCol; cc < region.startCol + region.colSpan; cc++) {
+                cellNums.push(rr * mergeCols + cc + 1);
+              }
+            }
+            el.textContent = cellNums.join('+');
+          } else {
+            el.style.display = 'none';
+          }
+        }
+
+        // Mark selection
+        if (sel && mc.row >= sel.r1 && mc.row <= sel.r2 && mc.col >= sel.c1 && mc.col <= sel.c2) {
+          el.classList.add('selecting');
+        }
+
+        // Highlight clicked merged region for unmerge
+        if (clickedRegion && region === clickedRegion) {
+          el.classList.add('selecting');
+        }
+      }
+
+      // Update buttons
+      var compat = sel ? checkSelectionMergeCompat(sel) : null;
+      var canMerge = sel && compat && compat.conflicts.length === 0;
+      mergeBtn.disabled = !canMerge;
+      unmergeBtn.disabled = !clickedRegion;
+    }
+
+    mergeBtn.addEventListener('click', function() {
+      var sel = getSelectionRect();
+      if (!sel) return;
+      var compat = checkSelectionMergeCompat(sel);
+      if (compat.conflicts.length > 0) return;
+      // Remove absorbed regions (reverse order to keep indices valid)
+      var toRemove = compat.absorbed.slice().sort(function(a, b) { return b - a; });
+      for (var i = 0; i < toRemove.length; i++) {
+        mergedRegions.splice(toRemove[i], 1);
+      }
+      mergedRegions.push({
+        startRow: sel.r1, startCol: sel.c1,
+        rowSpan: sel.r2 - sel.r1 + 1, colSpan: sel.c2 - sel.c1 + 1
+      });
+      mergeSelStart = null;
+      mergeSelEnd = null;
+      renderMergeGrid();
+      vscode.postMessage({ type: 'saveMergeRegions', regions: mergedRegions });
+    });
+
+    unmergeBtn.addEventListener('click', function() {
+      if (!mergeSelStart) return;
+      var region = getMergedRegionAt(mergeSelStart.row, mergeSelStart.col);
+      if (!region) return;
+      var idx = mergedRegions.indexOf(region);
+      if (idx >= 0) mergedRegions.splice(idx, 1);
+      mergeSelStart = null;
+      mergeSelEnd = null;
+      renderMergeGrid();
+      vscode.postMessage({ type: 'saveMergeRegions', regions: mergedRegions });
+    });
+
+    mergeClearBtn.addEventListener('click', function() {
+      mergedRegions = [];
+      mergeSelStart = null;
+      mergeSelEnd = null;
+      renderMergeGrid();
+      vscode.postMessage({ type: 'saveMergeRegions', regions: mergedRegions });
+    });
+
+    // Rebuild merge grid when grid size changes
+    var origGridClick = null;
+    function hookGridSizeChange() {
+      var observer = new MutationObserver(function() {
+        if (mergeRows !== selectedRows || mergeCols !== selectedCols) {
+          mergedRegions = [];
+          mergeSelStart = null;
+          mergeSelEnd = null;
+          buildMergeGrid();
+          vscode.postMessage({ type: 'saveMergeRegions', regions: mergedRegions });
+        }
+      });
+      observer.observe(document.getElementById('sizeLabel'), { childList: true, subtree: true });
+    }
+    hookGridSizeChange();
+    buildMergeGrid();
 
     // ── Collapsible sections ──
     var collapsedSections = {};
@@ -1877,7 +2190,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       renderCmdSummary();
     }
 
-    function buildSettingsTabs(total, labels) {
+    function buildSettingsTabs(total, labels, hidden) {
+      var hiddenSet = {};
+      if (hidden) for (var h = 0; h < hidden.length; h++) hiddenSet[hidden[h]] = true;
       settingsTabsEl.innerHTML = '';
       if (total <= 0) {
         settingsTabsEl.classList.add('hidden');
@@ -1892,8 +2207,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       allBtn.textContent = __i18n.all;
       allBtn.addEventListener('click', function() { switchSettingsTab('all'); });
       settingsTabsEl.appendChild(allBtn);
-      // Per-cell tabs
+      // Per-cell tabs (skip hidden/merged cells)
       for (var i = 0; i < total; i++) {
+        if (hiddenSet[i]) continue;
         (function(idx) {
           var btn = document.createElement('button');
           btn.className = 'stab';
@@ -1931,7 +2247,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     var cmdTabsEl = document.getElementById('cmdTabs');
     var activeCmdTab = 'all';
 
-    function buildCmdTabs(total, labels) {
+    function buildCmdTabs(total, labels, hidden) {
+      var hiddenSet = {};
+      if (hidden) for (var h = 0; h < hidden.length; h++) hiddenSet[hidden[h]] = true;
       var prevTab = activeCmdTab;
       cmdTabsEl.innerHTML = '';
       if (total <= 0) {
@@ -1940,8 +2258,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         return;
       }
       cmdTabsEl.classList.remove('hidden');
-      // Check if previous tab still valid
-      var validPrev = prevTab === 'all' || (parseInt(prevTab, 10) < total);
+      // Check if previous tab still valid (and not hidden)
+      var validPrev = prevTab === 'all' || (parseInt(prevTab, 10) < total && !hiddenSet[parseInt(prevTab, 10)]);
       var restoreTab = validPrev ? prevTab : 'all';
       var allBtn = document.createElement('button');
       allBtn.className = 'stab' + (restoreTab === 'all' ? ' active' : '');
@@ -1950,6 +2268,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       allBtn.addEventListener('click', function() { switchCmdTab('all'); });
       cmdTabsEl.appendChild(allBtn);
       for (var i = 0; i < total; i++) {
+        if (hiddenSet[i]) continue;
         (function(idx) {
           var btn = document.createElement('button');
           btn.className = 'stab' + (restoreTab === String(idx) ? ' active' : '');
@@ -2302,7 +2621,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     var broadcastTargetsEl = document.getElementById('broadcastTargets');
     var curGridTotal = 0;
 
-    function buildBroadcastTargets(total, labels) {
+    function buildBroadcastTargets(total, labels, hidden) {
+      var hiddenSet = {};
+      if (hidden) for (var h = 0; h < hidden.length; h++) hiddenSet[hidden[h]] = true;
       curGridTotal = total;
       broadcastTargetsEl.innerHTML = '';
       if (total <= 0) {
@@ -2318,8 +2639,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       allLabel.appendChild(allCb);
       allLabel.appendChild(document.createTextNode(' ' + __i18n.all));
       broadcastTargetsEl.appendChild(allLabel);
-      // Per-cell checkboxes (unchecked when All is active)
+      // Per-cell checkboxes (skip hidden/merged cells)
       for (var i = 0; i < total; i++) {
+        if (hiddenSet[i]) continue;
         var lbl = document.createElement('label');
         lbl.className = 'broadcast-target';
         var cb = document.createElement('input');
@@ -2432,11 +2754,21 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         renderProjectList();
         renderPresetDropdown();
         var gridTotal = (msg.gridRows || 0) * (msg.gridCols || 0);
-        buildBroadcastTargets(gridTotal, msg.cellLabels || []);
-        buildSettingsTabs(gridTotal, msg.cellLabels || []);
-        buildCmdTabs(gridTotal, msg.cellLabels || []);
+        var curHiddenCells = msg.hiddenCells || [];
+        buildBroadcastTargets(gridTotal, msg.cellLabels || [], curHiddenCells);
+        buildSettingsTabs(gridTotal, msg.cellLabels || [], curHiddenCells);
+        buildCmdTabs(gridTotal, msg.cellLabels || [], curHiddenCells);
         showCmdTabValues();
         applySectionStates(msg.sectionStates || {});
+        // Restore merge regions
+        if (msg.mergedRegions && msg.mergedRegions.length > 0) {
+          mergedRegions = msg.mergedRegions;
+          if (mergeRows !== selectedRows || mergeCols !== selectedCols) {
+            buildMergeGrid();
+          } else {
+            renderMergeGrid();
+          }
+        }
       }
     });
 

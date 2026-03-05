@@ -6,9 +6,55 @@
   <img src="https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/icon.png" width="128" alt="Terminal Grid">
 </p>
 
-> Multiple terminals in a single editor tab — tmux-like panes powered by xterm.js + node-pty
+> A tmux-like terminal grid for VS Code — split, merge, broadcast, and let AI control your terminals via MCP.
 
 ![Terminal Grid Screenshot](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/screenshot.png)
+
+## MCP Integration — AI-Powered Terminal Control
+
+Terminal Grid includes a built-in [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server. AI agents like Claude Code or Codex can see your grid, run commands in any cell, and read the output — all through natural language.
+
+![MCP Demo](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-mcp.gif)
+
+**One prompt, three terminals at once:**
+
+> "Run ls in cell 2, show git log in cell 3, and run git status in cell 4"
+
+The AI calls `get_grid_info` to discover the layout, then `send_to_cell` for each target — commands execute simultaneously across your grid.
+
+### Setup
+
+1. `Ctrl+Shift+P` → **Terminal Grid: Copy MCP Config**
+2. Paste into your MCP client settings (e.g., `~/.claude/settings.json`)
+
+That's it — the MCP server auto-registers when the extension activates.
+
+### MCP Tools
+
+| Tool | Description |
+|------|-------------|
+| `get_grid_info` | Get grid dimensions, cell count, and labels |
+| `send_to_cell` | Send text/commands to a specific cell |
+| `read_cell` | Read terminal output from a cell |
+| `broadcast` | Send text to all cells at once |
+
+### Config Example
+
+```json
+{
+  "mcpServers": {
+    "terminal-grid": {
+      "command": "node",
+      "args": ["/path/to/extension/mcp-server.js"],
+      "env": { "TERMINAL_GRID_PORT": "7890" }
+    }
+  }
+}
+```
+
+### LLM CLI Support
+
+Run LLM CLI tools (Claude Code, Codex, etc.) directly inside grid cells. Terminal Grid automatically detects LLM TUI apps and sends the correct key sequences (CSI u / Kitty keyboard protocol) — Enter, Tab, and arrow keys just work.
 
 ## Features
 
@@ -18,9 +64,13 @@ Open up to 4x5 (20) terminals arranged in a customizable grid. Drag cell borders
 
 ![Grid Layout](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-grid-open.gif)
 
+### Cell Merge
+
+Merge adjacent cells into a single larger terminal. Select cells in the sidebar grid preview, click Merge, and open the grid — the merged region becomes one big pane. Useful for giving more space to a primary terminal while keeping smaller cells for monitoring.
+
 ### Startup Commands & Presets
 
-Auto-run commands when terminals spawn. Save entire grid configurations as presets — per-project auto-load supported.
+Auto-run commands when terminals spawn. Save entire grid configurations (size, merge regions, colors, commands) as presets — per-project auto-load supported.
 
 ![Startup Commands](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-startup-commands.gif)
 
@@ -32,13 +82,9 @@ Individual background color, foreground color, and font per cell. Apply to all c
 
 ### Broadcast Input
 
-Send commands to all terminals or selected cells at once. Supports CSI u (Kitty keyboard protocol) for LLM CLI tools like Claude Code and Codex.
+Send commands to all terminals or selected cells at once.
 
 ![Broadcast](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-broadcast.gif)
-
-### MCP Server & Agent API
-
-Built-in HTTP bridge for LLM orchestration. Control terminals programmatically from Claude Code, Codex, or any MCP client.
 
 ### And More
 
@@ -70,45 +116,13 @@ Built-in HTTP bridge for LLM orchestration. Control terminals programmatically f
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `terminalGrid.defaultRows` | `2` | Default number of rows (1–4) |
-| `terminalGrid.defaultCols` | `3` | Default number of columns (1–5) |
-| `terminalGrid.zoomPercent` | `100` | Global terminal font zoom (50–300%) |
+| `terminalGrid.defaultRows` | `2` | Default number of rows (1-4) |
+| `terminalGrid.defaultCols` | `3` | Default number of columns (1-5) |
+| `terminalGrid.zoomPercent` | `100` | Global terminal font zoom (50-300%) |
 | `terminalGrid.fontFamily` | `""` | Font family override (empty = IDE theme) |
 | `terminalGrid.backgroundColor` | `""` | Background color override (empty = IDE theme) |
 | `terminalGrid.foregroundColor` | `""` | Foreground color override (empty = IDE theme) |
 | `terminalGrid.apiPort` | `7890` | MCP HTTP bridge port (0 = disabled) |
-
-## MCP Integration
-
-Terminal Grid includes a built-in MCP (Model Context Protocol) server for LLM orchestration.
-
-### Setup
-
-1. `Ctrl+Shift+P` → **Terminal Grid: Copy MCP Config**
-2. Paste into your MCP client settings (e.g., `~/.claude/settings.json`)
-
-### MCP Tools
-
-| Tool | Description |
-|------|-------------|
-| `get_grid_info` | Get grid dimensions, cell count, and labels |
-| `send_to_cell` | Send text to a specific cell (append `\r` to execute) |
-| `read_cell` | Read terminal output from a cell |
-| `broadcast` | Send text to all cells at once |
-
-### Example
-
-```json
-{
-  "mcpServers": {
-    "terminal-grid": {
-      "command": "node",
-      "args": ["/path/to/extension/mcp-server.js"],
-      "env": { "TERMINAL_GRID_PORT": "7890" }
-    }
-  }
-}
-```
 
 ## Agent API
 
@@ -129,7 +143,6 @@ const output = await vscode.commands.executeCommand('terminalGrid.readCell', 0, 
 ## Requirements
 
 - VS Code 1.80.0+
-- node-pty (auto-prompted for installation on first use)
 
 ## License
 

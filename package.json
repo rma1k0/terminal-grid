@@ -22,15 +22,20 @@
   ],
   "keywords": [
     "terminal",
-    "grid",
-    "split",
-    "multiplexer",
+    "split terminal",
+    "multiple terminals",
+    "terminal layout",
+    "terminal grid",
+    "terminal manager",
     "tmux",
     "pane",
     "multi-terminal",
-    "xterm",
+    "multiplexer",
     "mcp",
-    "workspace"
+    "terminal merge",
+    "broadcast",
+    "claude",
+    "codex"
   ],
   "icon": "images/icon.png",
   "galleryBanner": {

@@ -116,6 +116,7 @@ export class TerminalGridPanel {
   private _stepGeneration: Record<number, number> = {};
   private _rows: number;
   private _cols: number;
+  private _hiddenCells: Set<number>;
   private _configListener: vscode.Disposable | undefined;
 
 
@@ -287,6 +288,7 @@ export class TerminalGridPanel {
   /** Broadcast text to all terminals */
   public broadcastInput(text: string): void {
     for (const t of this._terminals) {
+      if (this._hiddenCells.has(t.id)) continue;
       if (this._insideLlm[t.id]) {
         // LLM TUI: type char-by-char then send Enter
         this._typeToCell(t.id, text).then(() => stepsDelay(50)).then(() => {
@@ -350,6 +352,7 @@ export class TerminalGridPanel {
   }
 
   public readCell(cellId: number, lines?: number): string | null {
+    if (this._hiddenCells.has(cellId)) return null;
     const buf = this._outputBuffers[cellId];
     if (buf === undefined) return null;
     const clean = TerminalGridPanel._stripAnsi(buf);
@@ -423,6 +426,19 @@ export class TerminalGridPanel {
     this._context = context;
     this._rows = rows;
     this._cols = cols;
+
+    // Compute hidden cells from merge regions
+    const mergedRegions = context.globalState.get<{startRow: number; startCol: number; rowSpan: number; colSpan: number}[]>("mergedRegions", [])
+      .filter(m => m.startRow + m.rowSpan <= rows && m.startCol + m.colSpan <= cols);
+    this._hiddenCells = new Set<number>();
+    for (const m of mergedRegions) {
+      for (let r = m.startRow; r < m.startRow + m.rowSpan; r++) {
+        for (let c = m.startCol; c < m.startCol + m.colSpan; c++) {
+          if (r === m.startRow && c === m.startCol) continue;
+          this._hiddenCells.add(r * cols + c);
+        }
+      }
+    }
 
     // Ensure webview options use current extensionUri (path changes on update)
     this._panel.webview.options = {
@@ -612,6 +628,16 @@ export class TerminalGridPanel {
     // Spawn + wire handler immediately per cell (handler must be registered
     // before the first PTY output arrives, so spawn and onData stay together)
     for (let i = 0; i < total; i++) {
+      // Skip hidden cells (absorbed by merge)
+      if (this._hiddenCells.has(i)) {
+        const noopPty: PtyLike = { onData() {}, write() {}, resize() {}, kill() {} };
+        this._terminals.push({ id: i, pty: noopPty });
+        this._outputBuffers[i] = "";
+        this._cellShellType[i] = "";
+        this._insideLlm[i] = false;
+        this._csiUMode[i] = false;
+        continue;
+      }
       const cellShell = cellOverrides[i]?.shellType || globalShell || "";
       const pty = this._spawnPty(nodePty, c, r, cwd, cellShell || undefined);
       const id = i;
@@ -1004,6 +1030,7 @@ export class TerminalGridPanel {
     var __GRID_FG_COLOR = ${JSON.stringify(vscode.workspace.getConfiguration("terminalGrid").get<string>("foregroundColor", ""))};
     var __GRID_THEME = ${JSON.stringify(vscode.workspace.getConfiguration("terminalGrid").get<string>("colorTheme", ""))};
     var __GRID_THEME_COLORS = ${JSON.stringify(resolveThemeColors(vscode.workspace.getConfiguration("terminalGrid").get<string>("colorTheme", "")))};
+    var __GRID_MERGE_REGIONS = ${JSON.stringify(this._context.globalState.get<unknown[]>("mergedRegions", []).filter((m: any) => m.startRow + m.rowSpan <= this._rows && m.startCol + m.colSpan <= this._cols))};
   </script>
   <script nonce="${nonce}" src="${gridTerminalJs}"></script>
 </body>

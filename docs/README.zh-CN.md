@@ -6,9 +6,55 @@
   <img src="https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/icon.png" width="128" alt="Terminal Grid">
 </p>
 
-> 在单个编辑器标签页中打开多个终端 — 基于 xterm.js + node-pty 的 tmux 风格面板
+> VS Code 的 tmux 风格终端网格 — 拆分、合并、广播，并通过 MCP 让 AI 控制您的终端。
 
 ![Terminal Grid Screenshot](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/screenshot.png)
+
+## MCP 集成 — AI 驱动的终端控制
+
+Terminal Grid 内置 [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) 服务器。Claude Code 或 Codex 等 AI 代理可以查看网格、在任意单元格中运行命令并读取输出 — 全部通过自然语言完成。
+
+![MCP Demo](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-mcp.gif)
+
+**一条指令，三个终端同时执行：**
+
+> "在单元格 2 运行 ls，在单元格 3 显示 git log，在单元格 4 运行 git status"
+
+AI 调用 `get_grid_info` 获取布局，然后对每个目标调用 `send_to_cell` — 命令在整个网格中同时执行。
+
+### 设置方法
+
+1. `Ctrl+Shift+P` → **Terminal Grid: Copy MCP Config**
+2. 粘贴到 MCP 客户端配置中（如 `~/.claude/settings.json`）
+
+就这样 — 扩展激活时 MCP 服务器自动注册。
+
+### MCP 工具
+
+| 工具 | 描述 |
+|------|------|
+| `get_grid_info` | 获取网格尺寸、单元格数量和标签 |
+| `send_to_cell` | 向指定单元格发送文本/命令 |
+| `read_cell` | 读取单元格终端输出 |
+| `broadcast` | 向所有单元格同时发送 |
+
+### 配置示例
+
+```json
+{
+  "mcpServers": {
+    "terminal-grid": {
+      "command": "node",
+      "args": ["/path/to/extension/mcp-server.js"],
+      "env": { "TERMINAL_GRID_PORT": "7890" }
+    }
+  }
+}
+```
+
+### LLM CLI 支持
+
+在网格单元格中直接运行 LLM CLI 工具（Claude Code、Codex 等）。Terminal Grid 自动检测 LLM TUI 应用并发送正确的键序列（CSI u / Kitty 键盘协议）— Enter、Tab 和方向键直接可用。
 
 ## 功能
 
@@ -18,9 +64,13 @@
 
 ![Grid Layout](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-grid-open.gif)
 
+### 单元格合并
+
+将相邻单元格合并为一个更大的终端。在侧边栏网格预览中选择单元格，点击 Merge，然后打开网格 — 合并区域变为一个大面板。适合为主终端提供更多空间，同时保留小单元格用于监控。
+
 ### 启动命令 & 预设
 
-终端创建时自动执行命令。将整个网格配置保存为预设 — 支持按项目自动加载。
+终端创建时自动执行命令。将整个网格配置（大小、合并区域、颜色、命令）保存为预设 — 支持按项目自动加载。
 
 ![Startup Commands](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-startup-commands.gif)
 
@@ -32,13 +82,9 @@
 
 ### 广播输入
 
-向所有终端或选定单元格同时发送命令。支持 CSI u（Kitty 键盘协议），适配 Claude Code、Codex 等 LLM CLI 工具。
+向所有终端或选定单元格同时发送命令。
 
 ![Broadcast](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-broadcast.gif)
-
-### MCP 服务器 & Agent API
-
-内置 HTTP 桥接，用于 LLM 编排。通过 Claude Code、Codex 或任何 MCP 客户端以编程方式控制终端。
 
 ### 更多功能
 
@@ -70,31 +116,13 @@
 
 | 设置 | 默认值 | 描述 |
 |------|--------|------|
-| `terminalGrid.defaultRows` | `2` | 默认行数 (1–4) |
-| `terminalGrid.defaultCols` | `3` | 默认列数 (1–5) |
-| `terminalGrid.zoomPercent` | `100` | 全局终端字体缩放 (50–300%) |
+| `terminalGrid.defaultRows` | `2` | 默认行数 (1-4) |
+| `terminalGrid.defaultCols` | `3` | 默认列数 (1-5) |
+| `terminalGrid.zoomPercent` | `100` | 全局终端字体缩放 (50-300%) |
 | `terminalGrid.fontFamily` | `""` | 字体覆盖（空 = IDE 主题） |
 | `terminalGrid.backgroundColor` | `""` | 背景色覆盖（空 = IDE 主题） |
 | `terminalGrid.foregroundColor` | `""` | 前景色覆盖（空 = IDE 主题） |
 | `terminalGrid.apiPort` | `7890` | MCP HTTP 桥接端口（0 = 禁用） |
-
-## MCP 集成
-
-Terminal Grid 内置 MCP（Model Context Protocol）服务器，用于 LLM 编排。
-
-### 设置方法
-
-1. `Ctrl+Shift+P` → **Terminal Grid: Copy MCP Config**
-2. 粘贴到 MCP 客户端配置中（如 `~/.claude/settings.json`）
-
-### MCP 工具
-
-| 工具 | 描述 |
-|------|------|
-| `get_grid_info` | 获取网格尺寸、单元格数量和标签 |
-| `send_to_cell` | 向指定单元格发送文本（追加 `\r` 执行） |
-| `read_cell` | 读取单元格终端输出 |
-| `broadcast` | 向所有单元格同时发送 |
 
 ## Agent API
 
@@ -114,7 +142,6 @@ const output = await vscode.commands.executeCommand('terminalGrid.readCell', 0, 
 ## 要求
 
 - VS Code 1.80.0+
-- node-pty（首次使用时自动提示安装）
 
 ## 许可证
 
