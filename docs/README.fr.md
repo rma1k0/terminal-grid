@@ -24,10 +24,7 @@ L'IA appelle `get_grid_info` pour découvrir la disposition, puis `send_to_cell`
 
 ### Configuration
 
-1. `Ctrl+Shift+P` → **Terminal Grid: Copy MCP Config**
-2. Collez dans les paramètres du client MCP (ex : `~/.claude/settings.json`)
-
-C'est tout — le serveur MCP s'enregistre automatiquement à l'activation de l'extension.
+Aucune configuration nécessaire — le serveur MCP s'enregistre automatiquement à l'activation de l'extension. Installez simplement Terminal Grid et votre client MCP (Claude Code, etc.) le découvrira automatiquement.
 
 ### Outils MCP
 
@@ -37,20 +34,6 @@ C'est tout — le serveur MCP s'enregistre automatiquement à l'activation de l'
 | `send_to_cell` | Envoyer du texte/des commandes à une cellule |
 | `read_cell` | Lire la sortie du terminal d'une cellule |
 | `broadcast` | Envoyer à toutes les cellules |
-
-### Exemple de Configuration
-
-```json
-{
-  "mcpServers": {
-    "terminal-grid": {
-      "command": "node",
-      "args": ["/path/to/extension/mcp-server.js"],
-      "env": { "TERMINAL_GRID_PORT": "7890" }
-    }
-  }
-}
-```
 
 ### Support LLM CLI
 
@@ -92,6 +75,7 @@ Envoyez des commandes à tous les terminaux ou aux cellules sélectionnées.
 - **Menu Contextuel** — Clic droit pour coller, effacer, redémarrer, terminer ou renommer
 - **Thèmes** — 8 thèmes de couleurs intégrés
 - **Polices Personnalisées** — Chargez des fichiers .ttf/.otf/.woff/.woff2
+- **Dossiers de Projet** — Enregistrez des dossiers dans la barre latérale. Cliquez pour basculer, Ctrl+Clic pour ouvrir dans une nouvelle fenêtre
 - **Compatible Remote-SSH** — Fonctionne nativement
 - **Panneau Latéral Repliable** — Toutes les sections se replient, état persisté
 
@@ -110,7 +94,6 @@ Envoyez des commandes à tous les terminaux ou aux cellules sélectionnées.
 | `Terminal Grid: Open 2x3` | Ouvrir une grille 2x3 |
 | `Terminal Grid: Open 3x3` | Ouvrir une grille 3x3 |
 | `Terminal Grid: Open Custom Grid` | Ouvrir une grille aux dimensions personnalisées |
-| `Terminal Grid: Copy MCP Config` | Copier la configuration MCP dans le presse-papiers |
 
 ## Paramètres
 

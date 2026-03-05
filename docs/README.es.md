@@ -24,10 +24,7 @@ La IA llama a `get_grid_info` para descubrir el diseño, luego `send_to_cell` pa
 
 ### Configuración
 
-1. `Ctrl+Shift+P` → **Terminal Grid: Copy MCP Config**
-2. Pega en la configuración del cliente MCP (ej: `~/.claude/settings.json`)
-
-Eso es todo — el servidor MCP se registra automáticamente cuando se activa la extensión.
+No se necesita configuración — el servidor MCP se registra automáticamente cuando se activa la extensión. Solo instala Terminal Grid y tu cliente MCP (Claude Code, etc.) lo descubrirá automáticamente.
 
 ### Herramientas MCP
 
@@ -37,20 +34,6 @@ Eso es todo — el servidor MCP se registra automáticamente cuando se activa la
 | `send_to_cell` | Enviar texto/comandos a una celda |
 | `read_cell` | Leer salida del terminal de una celda |
 | `broadcast` | Enviar a todas las celdas |
-
-### Ejemplo de Configuración
-
-```json
-{
-  "mcpServers": {
-    "terminal-grid": {
-      "command": "node",
-      "args": ["/path/to/extension/mcp-server.js"],
-      "env": { "TERMINAL_GRID_PORT": "7890" }
-    }
-  }
-}
-```
 
 ### Soporte LLM CLI
 
@@ -92,6 +75,7 @@ Envía comandos a todos los terminales o celdas seleccionadas a la vez.
 - **Menú Contextual** — Clic derecho para pegar, limpiar, reiniciar, terminar o renombrar
 - **Temas** — 8 temas de colores integrados
 - **Fuentes Personalizadas** — Carga archivos .ttf/.otf/.woff/.woff2
+- **Carpetas de Proyecto** — Registra carpetas en la barra lateral. Clic para cambiar, Ctrl+Clic para abrir en nueva ventana
 - **Compatible con Remote-SSH** — Funciona de forma nativa
 - **Panel Lateral Plegable** — Todas las secciones se pliegan, estado persistido
 
@@ -110,7 +94,6 @@ Envía comandos a todos los terminales o celdas seleccionadas a la vez.
 | `Terminal Grid: Open 2x3` | Abrir cuadrícula 2x3 |
 | `Terminal Grid: Open 3x3` | Abrir cuadrícula 3x3 |
 | `Terminal Grid: Open Custom Grid` | Abrir cuadrícula con dimensiones personalizadas |
-| `Terminal Grid: Copy MCP Config` | Copiar configuración MCP al portapapeles |
 
 ## Configuración
 

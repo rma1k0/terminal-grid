@@ -24,10 +24,7 @@ The AI calls `get_grid_info` to discover the layout, then `send_to_cell` for eac
 
 ### Setup
 
-1. `Ctrl+Shift+P` → **Terminal Grid: Copy MCP Config**
-2. Paste into your MCP client settings (e.g., `~/.claude/settings.json`)
-
-That's it — the MCP server auto-registers when the extension activates.
+No configuration needed — the MCP server auto-registers when the extension activates. Just install Terminal Grid and your MCP client (Claude Code, etc.) will discover it automatically.
 
 ### MCP Tools
 
@@ -37,20 +34,6 @@ That's it — the MCP server auto-registers when the extension activates.
 | `send_to_cell` | Send text/commands to a specific cell |
 | `read_cell` | Read terminal output from a cell |
 | `broadcast` | Send text to all cells at once |
-
-### Config Example
-
-```json
-{
-  "mcpServers": {
-    "terminal-grid": {
-      "command": "node",
-      "args": ["/path/to/extension/mcp-server.js"],
-      "env": { "TERMINAL_GRID_PORT": "7890" }
-    }
-  }
-}
-```
 
 ### LLM CLI Support
 
@@ -92,6 +75,7 @@ Send commands to all terminals or selected cells at once.
 - **Context Menu** — Right-click to paste, clear, restart, kill, or rename
 - **Themes** — 8 built-in color themes
 - **Custom Fonts** — Load .ttf/.otf/.woff/.woff2 files
+- **Project Folders** — Register folders in the sidebar. Click to switch, Ctrl+Click to open in a new window
 - **Remote-SSH Compatible** — Works out of the box
 - **Collapsible Sidebar** — All sections collapse, state persisted
 
@@ -110,7 +94,6 @@ Send commands to all terminals or selected cells at once.
 | `Terminal Grid: Open 2x3` | Open a 2x3 grid |
 | `Terminal Grid: Open 3x3` | Open a 3x3 grid |
 | `Terminal Grid: Open Custom Grid` | Open grid with custom dimensions |
-| `Terminal Grid: Copy MCP Config` | Copy MCP server configuration to clipboard |
 
 ## Settings
 

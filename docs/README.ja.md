@@ -24,10 +24,7 @@ AIが`get_grid_info`でレイアウトを把握し、各ターゲットに`send_
 
 ### セットアップ
 
-1. `Ctrl+Shift+P` → **Terminal Grid: Copy MCP Config**
-2. MCPクライアント設定に貼り付け（例：`~/.claude/settings.json`）
-
-これだけです — 拡張機能の有効化時にMCPサーバーが自動登録されます。
+設定は不要です — 拡張機能の有効化時にMCPサーバーが自動登録されます。Terminal Gridをインストールするだけで、MCPクライアント（Claude Codeなど）が自動的に検出します。
 
 ### MCPツール
 
@@ -37,20 +34,6 @@ AIが`get_grid_info`でレイアウトを把握し、各ターゲットに`send_
 | `send_to_cell` | 指定セルにテキスト/コマンドを送信 |
 | `read_cell` | セルのターミナル出力を読み取り |
 | `broadcast` | すべてのセルに一括送信 |
-
-### 設定例
-
-```json
-{
-  "mcpServers": {
-    "terminal-grid": {
-      "command": "node",
-      "args": ["/path/to/extension/mcp-server.js"],
-      "env": { "TERMINAL_GRID_PORT": "7890" }
-    }
-  }
-}
-```
 
 ### LLM CLIサポート
 
@@ -92,6 +75,7 @@ LLM CLIツール（Claude Code、Codexなど）をグリッドセル内で直接
 - **コンテキストメニュー** — 右クリックで貼り付け、クリア、再起動、終了、名前変更
 - **テーマ** — 8種類の組み込みカラーテーマ
 - **カスタムフォント** — .ttf/.otf/.woff/.woff2 ファイルを読み込み
+- **プロジェクトフォルダ** — サイドバーにフォルダを登録。クリックで切り替え、Ctrl+クリックで新しいウィンドウで開く
 - **Remote-SSH対応** — すぐに使用可能
 - **折りたたみ可能なサイドバー** — すべてのセクションを折りたたみ、状態を自動保存
 
@@ -110,7 +94,6 @@ LLM CLIツール（Claude Code、Codexなど）をグリッドセル内で直接
 | `Terminal Grid: Open 2x3` | 2x3グリッドを開く |
 | `Terminal Grid: Open 3x3` | 3x3グリッドを開く |
 | `Terminal Grid: Open Custom Grid` | カスタムサイズのグリッドを開く |
-| `Terminal Grid: Copy MCP Config` | MCP設定をクリップボードにコピー |
 
 ## 設定
 

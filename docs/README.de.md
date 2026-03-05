@@ -24,10 +24,7 @@ Die KI ruft `get_grid_info` auf, um das Layout zu erkennen, dann `send_to_cell` 
 
 ### Einrichtung
 
-1. `Ctrl+Shift+P` → **Terminal Grid: Copy MCP Config**
-2. In die MCP-Client-Einstellungen einfügen (z.B. `~/.claude/settings.json`)
-
-Das war's — der MCP-Server registriert sich automatisch bei Aktivierung der Erweiterung.
+Keine Konfiguration erforderlich — der MCP-Server registriert sich automatisch bei Aktivierung der Erweiterung. Installieren Sie einfach Terminal Grid und Ihr MCP-Client (Claude Code, etc.) erkennt es automatisch.
 
 ### MCP-Werkzeuge
 
@@ -37,20 +34,6 @@ Das war's — der MCP-Server registriert sich automatisch bei Aktivierung der Er
 | `send_to_cell` | Text/Befehle an eine Zelle senden |
 | `read_cell` | Terminal-Ausgabe einer Zelle lesen |
 | `broadcast` | An alle Zellen senden |
-
-### Konfigurationsbeispiel
-
-```json
-{
-  "mcpServers": {
-    "terminal-grid": {
-      "command": "node",
-      "args": ["/path/to/extension/mcp-server.js"],
-      "env": { "TERMINAL_GRID_PORT": "7890" }
-    }
-  }
-}
-```
 
 ### LLM CLI-Unterstützung
 
@@ -92,6 +75,7 @@ Befehle an alle Terminals oder ausgewählte Zellen gleichzeitig senden.
 - **Kontextmenü** — Rechtsklick zum Einfügen, Löschen, Neustarten, Beenden oder Umbenennen
 - **Themes** — 8 integrierte Farbthemen
 - **Benutzerdefinierte Schriften** — .ttf/.otf/.woff/.woff2-Dateien laden
+- **Projektordner** — Ordner in der Seitenleiste registrieren. Klicken zum Wechseln, Strg+Klick zum Öffnen in neuem Fenster
 - **Remote-SSH-kompatibel** — Funktioniert sofort
 - **Einklappbare Seitenleiste** — Alle Abschnitte einklappbar, Zustand gespeichert
 
@@ -110,7 +94,6 @@ Befehle an alle Terminals oder ausgewählte Zellen gleichzeitig senden.
 | `Terminal Grid: Open 2x3` | 2x3-Raster öffnen |
 | `Terminal Grid: Open 3x3` | 3x3-Raster öffnen |
 | `Terminal Grid: Open Custom Grid` | Raster mit benutzerdefinierten Abmessungen öffnen |
-| `Terminal Grid: Copy MCP Config` | MCP-Konfiguration in die Zwischenablage kopieren |
 
 ## Einstellungen
 

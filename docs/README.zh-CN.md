@@ -24,10 +24,7 @@ AI 调用 `get_grid_info` 获取布局，然后对每个目标调用 `send_to_ce
 
 ### 设置方法
 
-1. `Ctrl+Shift+P` → **Terminal Grid: Copy MCP Config**
-2. 粘贴到 MCP 客户端配置中（如 `~/.claude/settings.json`）
-
-就这样 — 扩展激活时 MCP 服务器自动注册。
+无需配置 — 扩展激活时 MCP 服务器自动注册。只需安装 Terminal Grid，您的 MCP 客户端（Claude Code 等）将自动发现它。
 
 ### MCP 工具
 
@@ -37,20 +34,6 @@ AI 调用 `get_grid_info` 获取布局，然后对每个目标调用 `send_to_ce
 | `send_to_cell` | 向指定单元格发送文本/命令 |
 | `read_cell` | 读取单元格终端输出 |
 | `broadcast` | 向所有单元格同时发送 |
-
-### 配置示例
-
-```json
-{
-  "mcpServers": {
-    "terminal-grid": {
-      "command": "node",
-      "args": ["/path/to/extension/mcp-server.js"],
-      "env": { "TERMINAL_GRID_PORT": "7890" }
-    }
-  }
-}
-```
 
 ### LLM CLI 支持
 
@@ -92,6 +75,7 @@ AI 调用 `get_grid_info` 获取布局，然后对每个目标调用 `send_to_ce
 - **右键菜单** — 粘贴、清除、重启、终止或重命名
 - **主题** — 8 种内置颜色主题
 - **自定义字体** — 加载 .ttf/.otf/.woff/.woff2 文件
+- **项目文件夹** — 在侧边栏注册文件夹。点击切换，Ctrl+点击在新窗口中打开
 - **Remote-SSH 兼容** — 开箱即用
 - **可折叠侧边栏** — 所有区域可折叠，状态自动保存
 
@@ -110,7 +94,6 @@ AI 调用 `get_grid_info` 获取布局，然后对每个目标调用 `send_to_ce
 | `Terminal Grid: Open 2x3` | 打开 2x3 网格 |
 | `Terminal Grid: Open 3x3` | 打开 3x3 网格 |
 | `Terminal Grid: Open Custom Grid` | 打开自定义大小网格 |
-| `Terminal Grid: Copy MCP Config` | 复制 MCP 服务器配置到剪贴板 |
 
 ## 设置
 
