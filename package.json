@@ -106,6 +106,12 @@
         "title": "%command.copyMcpConfig%"
       }
     ],
+    "mcpServerDefinitionProviders": [
+      {
+        "id": "terminalGrid",
+        "label": "Terminal Grid"
+      }
+    ],
     "configuration": {
       "title": "%config.title%",
       "properties": {

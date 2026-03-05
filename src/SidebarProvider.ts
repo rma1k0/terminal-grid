@@ -142,6 +142,87 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
           this.sendConfig();
           break;
         }
+        // ── Sequential startup steps ──
+        case "addStep": {
+          if (msg.target === "all") {
+            const steps = this._context.globalState.get<{type: string; input?: string; ms?: number}[]>("defaultSteps", []);
+            steps.push(msg.step);
+            await this._context.globalState.update("defaultSteps", steps);
+            // Sync legacy: first command step → defaultCommand
+            const firstCmd = steps.find((s: {type: string; input?: string}) => s.type === "command");
+            await this._context.globalState.update("defaultCommand", firstCmd?.input || "");
+          } else {
+            const overrides = this._context.globalState.get<Record<number, Record<string, unknown>>>("cellOverrides", {});
+            const cid = msg.target as number;
+            if (!overrides[cid]) overrides[cid] = {};
+            if (!Array.isArray(overrides[cid].startupSteps)) overrides[cid].startupSteps = [];
+            (overrides[cid].startupSteps as unknown[]).push(msg.step);
+            // Sync legacy
+            const first = (overrides[cid].startupSteps as {type: string; input?: string}[]).find(s => s.type === "command");
+            overrides[cid].startupCommand = first?.input || "";
+            await this._context.globalState.update("cellOverrides", overrides);
+          }
+          this.sendConfig();
+          break;
+        }
+        case "removeStep": {
+          if (msg.target === "all") {
+            const steps = this._context.globalState.get<{type: string; input?: string}[]>("defaultSteps", []);
+            steps.splice(msg.index, 1);
+            await this._context.globalState.update("defaultSteps", steps);
+            const firstCmd = steps.find((s: {type: string; input?: string}) => s.type === "command");
+            await this._context.globalState.update("defaultCommand", firstCmd?.input || "");
+          } else {
+            const overrides = this._context.globalState.get<Record<number, Record<string, unknown>>>("cellOverrides", {});
+            const cid = msg.target as number;
+            if (Array.isArray(overrides[cid]?.startupSteps)) {
+              (overrides[cid].startupSteps as unknown[]).splice(msg.index, 1);
+              const first = (overrides[cid].startupSteps as {type: string; input?: string}[]).find(s => s.type === "command");
+              overrides[cid].startupCommand = first?.input || "";
+              await this._context.globalState.update("cellOverrides", overrides);
+            }
+          }
+          this.sendConfig();
+          break;
+        }
+        case "reorderSteps": {
+          if (msg.target === "all") {
+            await this._context.globalState.update("defaultSteps", msg.steps);
+            const firstCmd = (msg.steps as {type: string; input?: string}[]).find(s => s.type === "command");
+            await this._context.globalState.update("defaultCommand", firstCmd?.input || "");
+          } else {
+            const overrides = this._context.globalState.get<Record<number, Record<string, unknown>>>("cellOverrides", {});
+            const cid = msg.target as number;
+            if (!overrides[cid]) overrides[cid] = {};
+            overrides[cid].startupSteps = msg.steps;
+            const first = (msg.steps as {type: string; input?: string}[]).find(s => s.type === "command");
+            overrides[cid].startupCommand = first?.input || "";
+            await this._context.globalState.update("cellOverrides", overrides);
+          }
+          this.sendConfig();
+          break;
+        }
+        case "updateStep": {
+          if (msg.target === "all") {
+            const steps = this._context.globalState.get<unknown[]>("defaultSteps", []);
+            if (msg.index >= 0 && msg.index < steps.length) {
+              steps[msg.index] = msg.step;
+              await this._context.globalState.update("defaultSteps", steps);
+            }
+          } else {
+            const overrides = this._context.globalState.get<Record<number, Record<string, unknown>>>("cellOverrides", {});
+            const cid = msg.target as number;
+            const steps = (overrides[cid]?.startupSteps as unknown[] | undefined) || [];
+            if (msg.index >= 0 && msg.index < steps.length) {
+              steps[msg.index] = msg.step;
+              if (!overrides[cid]) overrides[cid] = {};
+              overrides[cid].startupSteps = steps;
+              await this._context.globalState.update("cellOverrides", overrides);
+            }
+          }
+          this.sendConfig();
+          break;
+        }
         // ── Project Manager ──
         case "addProject": {
           const projects = this._context.globalState.get<{name: string; path: string}[]>("projects", []);
@@ -211,6 +292,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
             cellLabels: string[]; zoomPercent: number;
             fontFamily: string; bgColor: string; fgColor: string;
             colorTheme?: string; shellType?: string; defaultCommand?: string;
+            defaultSteps?: unknown[]; cellStepsOverrides?: Record<number, Record<string, unknown>>;
           } | undefined;
           if (!preset) break;
           const cfg = vscode.workspace.getConfiguration("terminalGrid");
@@ -225,6 +307,22 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
           await this._context.globalState.update("startupCommands", preset.startupCommands || []);
           await this._context.globalState.update("cellLabels", preset.cellLabels || []);
           await this._context.globalState.update("defaultCommand", preset.defaultCommand || "");
+          // Restore sequential startup steps
+          if (preset.defaultSteps) {
+            await this._context.globalState.update("defaultSteps", preset.defaultSteps);
+          } else if (preset.defaultCommand) {
+            await this._context.globalState.update("defaultSteps", [{ type: "command", input: preset.defaultCommand }]);
+          } else {
+            await this._context.globalState.update("defaultSteps", []);
+          }
+          if (preset.cellStepsOverrides) {
+            const cur = this._context.globalState.get<Record<number, Record<string, unknown>>>("cellOverrides", {});
+            for (const [k, v] of Object.entries(preset.cellStepsOverrides)) {
+              if (!cur[Number(k)]) cur[Number(k)] = {};
+              if (Array.isArray(v.startupSteps)) cur[Number(k)].startupSteps = v.startupSteps;
+            }
+            await this._context.globalState.update("cellOverrides", cur);
+          }
           // Auto-open grid with loaded preset dimensions
           TerminalGridPanel.createOrShow(this._context, preset.rows, preset.cols);
           this.sendConfig();
@@ -299,16 +397,22 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
           break;
         }
         case "setDefaultCommand": {
-          await this._context.globalState.update("defaultCommand", msg.command || "");
+          // Legacy handler — sync to new defaultSteps format
+          const cmd = msg.command || "";
+          await this._context.globalState.update("defaultCommand", cmd);
+          await this._context.globalState.update("defaultSteps", cmd ? [{ type: "command", input: cmd }] : []);
+          this.sendConfig();
           break;
         }
         case "setCellCommand": {
-          const overrides = this._context.globalState.get<Record<number, {bgColor?: string; fgColor?: string; fontFamily?: string; themeName?: string; shellType?: string; startupCommand?: string}>>("cellOverrides", {});
-          if (!overrides[msg.cellId]) {
-            overrides[msg.cellId] = {};
-          }
-          overrides[msg.cellId].startupCommand = msg.command || "";
+          // Legacy handler — sync to new startupSteps format
+          const overrides = this._context.globalState.get<Record<number, Record<string, unknown>>>("cellOverrides", {});
+          if (!overrides[msg.cellId]) overrides[msg.cellId] = {};
+          const cmdVal = msg.command || "";
+          overrides[msg.cellId].startupCommand = cmdVal;
+          overrides[msg.cellId].startupSteps = cmdVal ? [{ type: "command", input: cmdVal }] : [];
           await this._context.globalState.update("cellOverrides", overrides);
+          this.sendConfig();
           break;
         }
         case "clearAllCellOverrides": {
@@ -389,6 +493,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       colorTheme: cfg.get<string>("colorTheme", ""),
       shellType: cfg.get<string>("shellType", ""),
       defaultCommand: this._context.globalState.get<string>("defaultCommand", ""),
+      defaultSteps: this._context.globalState.get<unknown[]>("defaultSteps", []),
+      cellStepsOverrides: this._context.globalState.get<Record<number, Record<string, unknown>>>("cellOverrides", {}),
     };
     const presets = this._context.globalState.get<Record<string, unknown>[]>("presets", []);
     const existIdx = presets.findIndex((p) => (p as {name: string}).name === name);
@@ -400,8 +506,52 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     await this._context.globalState.update("presets", presets);
   }
 
+  /** Migrate legacy single-command fields into the new sequential steps format, then clear them. */
+  private async _migrateSteps(): Promise<void> {
+    let dirty = false;
+    // Global: defaultCommand → defaultSteps
+    const defaultSteps = this._context.globalState.get<unknown[]>("defaultSteps", []);
+    const defaultCommand = this._context.globalState.get<string>("defaultCommand", "");
+    if (defaultCommand && defaultSteps.length === 0) {
+      await this._context.globalState.update("defaultSteps", [{ type: "command", input: defaultCommand }]);
+      await this._context.globalState.update("defaultCommand", "");
+      dirty = true;
+    } else if (defaultCommand && defaultSteps.length > 0) {
+      // New steps exist — old field is stale, just clear it
+      await this._context.globalState.update("defaultCommand", "");
+      dirty = true;
+    }
+    // Per-cell: startupCommand → startupSteps
+    const overrides = this._context.globalState.get<Record<number, Record<string, unknown>>>("cellOverrides", {});
+    for (const key of Object.keys(overrides)) {
+      const ov = overrides[Number(key)];
+      if (!ov) continue;
+      const oldCmd = ov.startupCommand as string | undefined;
+      const newSteps = ov.startupSteps as unknown[] | undefined;
+      if (oldCmd && (!newSteps || newSteps.length === 0)) {
+        ov.startupSteps = [{ type: "command", input: oldCmd }];
+        delete ov.startupCommand;
+        dirty = true;
+      } else if (oldCmd && newSteps && newSteps.length > 0) {
+        delete ov.startupCommand;
+        dirty = true;
+      }
+    }
+    // Old startupCommands array (count-based) → clear if defaultSteps already has data
+    const oldCmds = this._context.globalState.get<unknown[]>("startupCommands", []);
+    if (oldCmds.length > 0) {
+      await this._context.globalState.update("startupCommands", []);
+      dirty = true;
+    }
+    if (dirty) {
+      await this._context.globalState.update("cellOverrides", overrides);
+    }
+  }
+
   public sendConfig(): void {
     if (!this._view) return;
+    // Auto-migrate legacy fields on every config send
+    this._migrateSteps();
     const cfg = vscode.workspace.getConfiguration("terminalGrid");
     const customFonts = this._context.globalState.get<CustomFont[]>("customFonts", []);
     const startupCommands = this._context.globalState.get<{command: string; count: number}[]>("startupCommands", []);
@@ -409,7 +559,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     const presets = this._context.globalState.get<Record<string, unknown>[]>("presets", []);
     const projectPresets = this._context.globalState.get<Record<string, string>>("projectPresets", {});
     const cellLabels = this._context.globalState.get<string[]>("cellLabels", []);
-    const cellOverrides = this._context.globalState.get<Record<number, {bgColor?: string; fgColor?: string; fontFamily?: string; shellType?: string}>>("cellOverrides", {});
+    const cellOverrides = this._context.globalState.get<Record<number, {bgColor?: string; fgColor?: string; fontFamily?: string; shellType?: string; startupSteps?: unknown[]}>>("cellOverrides", {});
+    const defaultSteps = this._context.globalState.get<unknown[]>("defaultSteps", []);
     const sectionStates = this._context.globalState.get<Record<string, boolean>>("sectionStates", {});
     const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || "";
     const panel = TerminalGridPanel.currentPanel;
@@ -432,6 +583,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       projectPresets: projectPresets,
       cellLabels: cellLabels,
       cellOverrides: cellOverrides,
+      defaultSteps: defaultSteps,
       sectionStates: sectionStates,
       workspacePath: workspacePath,
       gridRows: panel?.getRows() ?? 0,
@@ -804,6 +956,42 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       flex-shrink: 0; transition: all .1s;
     }
     .cmd-summary-del:hover { background: rgba(255,80,80,.2); color: #f55; }
+    /* ── Step groups (sequential startup commands) ── */
+    .cmd-step-group { margin-bottom: 6px; }
+    .cmd-step-group-header {
+      font-size: 9px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .5px; opacity: .4; margin-bottom: 4px; padding: 0 4px;
+      color: var(--vscode-textLink-foreground, #3794ff);
+    }
+    .cmd-step-list { display: flex; flex-direction: column; gap: 2px; min-height: 4px; }
+    .cmd-step-item {
+      display: flex; align-items: center; gap: 5px;
+      padding: 4px 6px; background: rgba(255,255,255,.025);
+      border: 1px solid rgba(255,255,255,.05); border-radius: 5px;
+      font-size: 10px; cursor: grab; transition: background .15s, border-color .15s, opacity .15s;
+      user-select: none;
+    }
+    .cmd-step-item:hover { background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.10); }
+    .cmd-step-item.dragging { opacity: .4; border-color: var(--vscode-focusBorder, rgba(0,127,212,.6)); }
+    .cmd-step-handle { cursor: grab; opacity: .3; font-size: 14px; line-height: 1; flex-shrink: 0; width: 14px; text-align: center; }
+    .cmd-step-handle:hover { opacity: .6; }
+    .cmd-step-num {
+      opacity: .3; font-size: 9px; font-weight: 700; min-width: 14px;
+      text-align: center; flex-shrink: 0; font-variant-numeric: tabular-nums;
+    }
+    .cmd-step-icon { opacity: .5; font-size: 9px; margin-right: 2px; }
+    .cmd-step-text {
+      flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      font-family: monospace; opacity: .75; font-size: 10px;
+    }
+    .cmd-step-del {
+      width: 16px; height: 16px; border: none; border-radius: 3px;
+      background: transparent; color: rgba(255,255,255,.25);
+      font-size: 12px; line-height: 1; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; transition: all .1s;
+    }
+    .cmd-step-del:hover { background: rgba(255,80,80,.2); color: #f55; }
     /* ── node-pty banner ── */
     .pty-banner {
       display: flex; align-items: center; gap: 10px;
@@ -1000,12 +1188,22 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
             <option value="docker compose up">docker compose up</option>
             <option value="ssh">ssh</option>
             <option value="htop">htop</option>
+            <option value="/resume">/resume</option>
+            <option value="/compact">/compact</option>
+            <option value="yes">yes</option>
+            <option value="exit">exit</option>
+            <option value="__enter__">Enter (\u21B5)</option>
             <option value="__custom__">${vscode.l10n.t("Custom command…")}</option>
+            <option value="__timeout__">${vscode.l10n.t("Timeout (ms)…")}</option>
           </select>
         </div>
         <div class="cmd-add-row" id="cmdCustomRow" style="display:none;">
           <input class="glass-input" id="cmdCustom" placeholder="${vscode.l10n.t("Custom command…")}" style="flex:1;min-width:0;" />
           <button class="stepper-btn" id="cmdApplyBtn" title="${vscode.l10n.t("Apply")}">&#10003;</button>
+        </div>
+        <div class="cmd-add-row" id="cmdTimeoutRow" style="display:none;">
+          <input class="glass-input" type="number" id="cmdTimeoutMs" placeholder="${vscode.l10n.t("Milliseconds (e.g. 1500)")}" min="100" step="100" style="flex:1;min-width:0;" />
+          <button class="stepper-btn" id="cmdTimeoutApplyBtn" title="${vscode.l10n.t("Apply")}">&#10003;</button>
         </div>
         <div class="cmd-summary-divider"></div>
         <div id="cmdSummaryList" class="cmd-summary-list"></div>
@@ -1366,43 +1564,62 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       toggleShellDropdown();
     });
 
-    // ── Per-cell command ──
+    // ── Per-cell sequential startup steps ──
     var cmdPresetEl = document.getElementById('cmdPreset');
     var cmdCustomRow = document.getElementById('cmdCustomRow');
     var cmdCustomInput = document.getElementById('cmdCustom');
-    var curDefaultCommand = '';
+    var cmdTimeoutRow = document.getElementById('cmdTimeoutRow');
+    var cmdTimeoutMsInput = document.getElementById('cmdTimeoutMs');
+    var defaultSteps = [];
 
-    function getCellCommand(cid) {
-      if (cid === 'all') return curDefaultCommand;
-      var ov = cellOverrides[parseInt(cid, 10)] || {};
-      return ov.startupCommand || '';
+    function getStepsForTarget(target) {
+      if (target === 'all') return defaultSteps || [];
+      var ov = cellOverrides[parseInt(String(target), 10)] || {};
+      if (ov.startupSteps && ov.startupSteps.length > 0) return ov.startupSteps;
+      if (ov.startupCommand) return [{ type: 'command', input: ov.startupCommand }];
+      return [];
     }
 
-    function applyCommand(val) {
-      if (activeCmdTab === 'all') {
-        curDefaultCommand = val;
-        vscode.postMessage({ type: 'setDefaultCommand', command: val });
+    function addStep(step) {
+      var target = activeCmdTab === 'all' ? 'all' : parseInt(activeCmdTab, 10);
+      if (target === 'all') {
+        defaultSteps.push(step);
       } else {
-        var cid = parseInt(activeCmdTab, 10);
-        if (!cellOverrides[cid]) cellOverrides[cid] = { bgColor: '', fgColor: '', fontFamily: '', themeName: '', shellType: '', startupCommand: '' };
-        cellOverrides[cid].startupCommand = val;
-        vscode.postMessage({ type: 'setCellCommand', cellId: cid, command: val });
-        updateCmdTabIndicators();
+        if (!cellOverrides[target]) cellOverrides[target] = {};
+        if (!cellOverrides[target].startupSteps) cellOverrides[target].startupSteps = [];
+        cellOverrides[target].startupSteps.push(step);
       }
-      renderCmdSummary();
+      vscode.postMessage({ type: 'addStep', target: target, step: step });
+      updateCmdTabIndicators();
     }
 
     cmdPresetEl.addEventListener('change', function() {
       var val = this.value;
       if (val === '__custom__') {
         cmdCustomRow.style.display = 'flex';
+        cmdTimeoutRow.style.display = 'none';
         cmdCustomInput.focus();
+        this.value = '';
+        return;
+      }
+      if (val === '__timeout__') {
+        cmdTimeoutRow.style.display = 'flex';
+        cmdCustomRow.style.display = 'none';
+        cmdTimeoutMsInput.focus();
+        this.value = '';
+        return;
+      }
+      if (val === '__enter__') {
+        cmdCustomRow.style.display = 'none';
+        cmdTimeoutRow.style.display = 'none';
+        addStep({ type: 'command', input: '' });
         this.value = '';
         return;
       }
       if (val) {
         cmdCustomRow.style.display = 'none';
-        applyCommand(val);
+        cmdTimeoutRow.style.display = 'none';
+        addStep({ type: 'command', input: val });
         this.value = '';
       }
     });
@@ -1410,7 +1627,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     document.getElementById('cmdApplyBtn').addEventListener('click', function() {
       var val = cmdCustomInput.value.trim();
       if (val) {
-        applyCommand(val);
+        addStep({ type: 'command', input: val });
         cmdCustomInput.value = '';
         cmdCustomRow.style.display = 'none';
       }
@@ -1419,6 +1636,21 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     cmdCustomInput.addEventListener('keydown', function(e) {
       if (e.key === 'Enter') {
         document.getElementById('cmdApplyBtn').click();
+      }
+    });
+
+    document.getElementById('cmdTimeoutApplyBtn').addEventListener('click', function() {
+      var ms = parseInt(cmdTimeoutMsInput.value, 10);
+      if (ms > 0) {
+        addStep({ type: 'timeout', ms: ms });
+        cmdTimeoutMsInput.value = '';
+        cmdTimeoutRow.style.display = 'none';
+      }
+    });
+
+    cmdTimeoutMsInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        document.getElementById('cmdTimeoutApplyBtn').click();
       }
     });
 
@@ -1641,6 +1873,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       }
       cmdPresetEl.value = '';
       cmdCustomRow.style.display = 'none';
+      cmdTimeoutRow.style.display = 'none';
       renderCmdSummary();
     }
 
@@ -1699,6 +1932,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     var activeCmdTab = 'all';
 
     function buildCmdTabs(total, labels) {
+      var prevTab = activeCmdTab;
       cmdTabsEl.innerHTML = '';
       if (total <= 0) {
         cmdTabsEl.classList.add('hidden');
@@ -1706,8 +1940,11 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         return;
       }
       cmdTabsEl.classList.remove('hidden');
+      // Check if previous tab still valid
+      var validPrev = prevTab === 'all' || (parseInt(prevTab, 10) < total);
+      var restoreTab = validPrev ? prevTab : 'all';
       var allBtn = document.createElement('button');
-      allBtn.className = 'stab active';
+      allBtn.className = 'stab' + (restoreTab === 'all' ? ' active' : '');
       allBtn.dataset.tab = 'all';
       allBtn.textContent = __i18n.all;
       allBtn.addEventListener('click', function() { switchCmdTab('all'); });
@@ -1715,14 +1952,14 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       for (var i = 0; i < total; i++) {
         (function(idx) {
           var btn = document.createElement('button');
-          btn.className = 'stab';
+          btn.className = 'stab' + (restoreTab === String(idx) ? ' active' : '');
           btn.dataset.tab = String(idx);
           btn.textContent = labels[idx] || String(idx + 1);
           btn.addEventListener('click', function() { switchCmdTab(String(idx)); });
           cmdTabsEl.appendChild(btn);
         })(i);
       }
-      activeCmdTab = 'all';
+      activeCmdTab = restoreTab;
       updateCmdTabIndicators();
     }
 
@@ -1736,6 +1973,15 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     }
 
     function updateCmdTabIndicators() {
+      var btns = cmdTabsEl.querySelectorAll('.stab');
+      for (var b = 0; b < btns.length; b++) {
+        var tab = btns[b].dataset.tab;
+        if (tab === 'all') continue;
+        var cid = parseInt(tab, 10);
+        var ov = cellOverrides[cid] || {};
+        var hasOv = ov.shellType || (ov.startupSteps && ov.startupSteps.length > 0) || ov.startupCommand;
+        btns[b].classList.toggle('has-override', !!hasOv);
+      }
       renderCmdSummary();
     }
 
@@ -1747,73 +1993,185 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       return String(idx + 1);
     }
 
+    function escapeStepHtml(str) {
+      var d = document.createElement('div');
+      d.textContent = str;
+      return d.innerHTML;
+    }
+
+    function getDragAfterElement(container, y) {
+      var elements = Array.prototype.slice.call(container.querySelectorAll('.cmd-step-item:not(.dragging)'));
+      var closest = null;
+      var closestOffset = Number.NEGATIVE_INFINITY;
+      for (var i = 0; i < elements.length; i++) {
+        var box = elements[i].getBoundingClientRect();
+        var offset = y - box.top - box.height / 2;
+        if (offset < 0 && offset > closestOffset) {
+          closestOffset = offset;
+          closest = elements[i];
+        }
+      }
+      return closest;
+    }
+
+    function renderStepGroup(container, target, label, steps, shellInfo) {
+      var group = document.createElement('div');
+      group.className = 'cmd-step-group';
+
+      var header = document.createElement('div');
+      header.className = 'cmd-step-group-header';
+      var headerText = label;
+      if (shellInfo) headerText += ' \u00b7 ' + shellInfo;
+      header.textContent = headerText;
+      group.appendChild(header);
+
+      var stepList = document.createElement('div');
+      stepList.className = 'cmd-step-list';
+      stepList.dataset.target = String(target);
+
+      for (var i = 0; i < steps.length; i++) {
+        (function(step, idx) {
+          var row = document.createElement('div');
+          row.className = 'cmd-step-item';
+          row.draggable = true;
+          row.dataset.index = String(idx);
+
+          var handle = document.createElement('span');
+          handle.className = 'cmd-step-handle';
+          handle.textContent = '\u2261';
+          row.appendChild(handle);
+
+          var num = document.createElement('span');
+          num.className = 'cmd-step-num';
+          num.textContent = String(idx + 1);
+          row.appendChild(num);
+
+          var txt = document.createElement('span');
+          txt.className = 'cmd-step-text';
+          if (step.type === 'timeout') {
+            txt.innerHTML = '<span class="cmd-step-icon">\u23F1</span> ' + step.ms + 'ms';
+            txt.title = 'Click to edit timeout';
+            txt.style.cursor = 'pointer';
+            (function(st, ix, tgt) {
+              txt.addEventListener('click', function() {
+                var cur = st.ms;
+                var inp = document.createElement('input');
+                inp.type = 'number';
+                inp.min = '100';
+                inp.step = '100';
+                inp.value = String(cur);
+                inp.style.cssText = 'width:70px;font-size:11px;padding:1px 4px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,#555);border-radius:3px;';
+                txt.textContent = '';
+                txt.appendChild(inp);
+                inp.focus();
+                inp.select();
+                function commit() {
+                  var v = parseInt(inp.value, 10);
+                  if (!v || v < 0) v = cur;
+                  st.ms = v;
+                  txt.innerHTML = '<span class="cmd-step-icon">\u23F1</span> ' + v + 'ms';
+                  vscode.postMessage({ type: 'updateStep', target: tgt, index: ix, step: { type: 'timeout', ms: v } });
+                }
+                inp.addEventListener('blur', commit);
+                inp.addEventListener('keydown', function(ev) {
+                  if (ev.key === 'Enter') { inp.blur(); }
+                  if (ev.key === 'Escape') { inp.value = String(cur); inp.blur(); }
+                });
+              });
+            })(step, idx, target);
+          } else if (step.input === '' || step.input === undefined) {
+            txt.innerHTML = '<span class="cmd-step-icon">\u21B5</span> Enter';
+            txt.title = 'Enter';
+          } else {
+            txt.innerHTML = '<span class="cmd-step-icon">\u25B6</span> ' + escapeStepHtml(step.input);
+            txt.title = step.input;
+          }
+          row.appendChild(txt);
+
+          var del = document.createElement('button');
+          del.className = 'cmd-step-del';
+          del.textContent = '\u00d7';
+          del.addEventListener('click', function() {
+            if (target === 'all') {
+              defaultSteps.splice(idx, 1);
+            } else {
+              var ov = cellOverrides[target];
+              if (ov && ov.startupSteps) ov.startupSteps.splice(idx, 1);
+            }
+            vscode.postMessage({ type: 'removeStep', target: target, index: idx });
+            updateCmdTabIndicators();
+          });
+          row.appendChild(del);
+
+          row.addEventListener('dragstart', function(e) {
+            e.dataTransfer.setData('text/plain', JSON.stringify({ target: target, index: idx }));
+            e.dataTransfer.effectAllowed = 'move';
+            row.classList.add('dragging');
+          });
+          row.addEventListener('dragend', function() {
+            row.classList.remove('dragging');
+          });
+
+          stepList.appendChild(row);
+        })(steps[i], i);
+      }
+
+      // Drop zone
+      stepList.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        var dragging = stepList.querySelector('.dragging');
+        if (!dragging) return;
+        var afterEl = getDragAfterElement(stepList, e.clientY);
+        if (afterEl) {
+          stepList.insertBefore(dragging, afterEl);
+        } else {
+          stepList.appendChild(dragging);
+        }
+      });
+
+      stepList.addEventListener('drop', function(e) {
+        e.preventDefault();
+        var items = stepList.querySelectorAll('.cmd-step-item');
+        var newSteps = [];
+        for (var j = 0; j < items.length; j++) {
+          var oldIdx = parseInt(items[j].dataset.index, 10);
+          newSteps.push(steps[oldIdx]);
+        }
+        if (target === 'all') {
+          defaultSteps = newSteps;
+        } else {
+          if (!cellOverrides[target]) cellOverrides[target] = {};
+          cellOverrides[target].startupSteps = newSteps;
+        }
+        vscode.postMessage({ type: 'reorderSteps', target: target, steps: newSteps });
+        updateCmdTabIndicators();
+      });
+
+      group.appendChild(stepList);
+      container.appendChild(group);
+    }
+
     function renderCmdSummary() {
       var list = document.getElementById('cmdSummaryList');
       list.innerHTML = '';
-      var items = [];
-      // Global defaults
-      if (curShellType || curDefaultCommand) {
-        items.push({
-          label: __i18n.all,
-          shell: curShellType ? getShellDisplayName(curShellType) : '',
-          cmd: curDefaultCommand || '',
-          key: 'all'
-        });
+
+      // "All" group: shell info + default steps
+      var allShell = curShellType ? getShellDisplayName(curShellType) : '';
+      var allSteps = defaultSteps || [];
+      if (allShell || allSteps.length > 0) {
+        renderStepGroup(list, 'all', __i18n.all, allSteps, allShell);
       }
-      // Per-cell overrides
+
+      // Per-cell groups
       var total = cmdTabsEl.querySelectorAll('.stab:not([data-tab="all"])').length;
       for (var i = 0; i < total; i++) {
         var ov = cellOverrides[i] || {};
-        if (ov.shellType || ov.startupCommand) {
-          items.push({
-            label: getCellLabel(i),
-            shell: ov.shellType ? getShellDisplayName(ov.shellType) : '',
-            cmd: ov.startupCommand || '',
-            key: String(i)
-          });
+        var cellShell = ov.shellType ? getShellDisplayName(ov.shellType) : '';
+        var cellSteps = getStepsForTarget(i);
+        if (cellShell || cellSteps.length > 0) {
+          renderStepGroup(list, i, getCellLabel(i), cellSteps, cellShell);
         }
-      }
-      if (items.length === 0) return;
-      for (var k = 0; k < items.length; k++) {
-        (function(item) {
-          var row = document.createElement('div');
-          row.className = 'cmd-summary-item';
-          var lbl = document.createElement('span');
-          lbl.className = 'cmd-summary-label';
-          lbl.textContent = item.label;
-          row.appendChild(lbl);
-          var txt = document.createElement('span');
-          txt.className = 'cmd-summary-text';
-          var parts = [];
-          if (item.shell) parts.push(item.shell);
-          if (item.cmd) parts.push(item.cmd);
-          txt.textContent = parts.join(' \u00b7 ');
-          txt.title = parts.join(' · ');
-          row.appendChild(txt);
-          var del = document.createElement('button');
-          del.className = 'cmd-summary-del';
-          del.textContent = '\u00d7';
-          del.addEventListener('click', function() {
-            if (item.key === 'all') {
-              curShellType = '';
-              curDefaultCommand = '';
-              vscode.postMessage({ type: 'setConfig', key: 'shellType', value: '' });
-              vscode.postMessage({ type: 'setDefaultCommand', command: '' });
-            } else {
-              var cid = parseInt(item.key, 10);
-              if (cellOverrides[cid]) {
-                cellOverrides[cid].shellType = '';
-                cellOverrides[cid].startupCommand = '';
-              }
-              vscode.postMessage({ type: 'setShellForCell', cellId: cid, shellType: '' });
-              vscode.postMessage({ type: 'setCellCommand', cellId: cid, command: '' });
-            }
-            showCmdTabValues();
-            renderCmdSummary();
-          });
-          row.appendChild(del);
-          list.appendChild(row);
-        })(items[k]);
       }
     }
 
@@ -2061,7 +2419,6 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         curFg = msg.fgColor || '';
         curThemeName = msg.colorTheme || '';
         curShellType = msg.shellType || '';
-        curDefaultCommand = msg.defaultCommand || '';
         themeNames = msg.themeNames || [''];
         availableShells = msg.availableShells || [{ name: __i18n.shellAuto, path: '' }];
         customFontNames = msg.customFonts || [];
@@ -2070,6 +2427,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         projectPresetsMap = msg.projectPresets || {};
         workspacePath = msg.workspacePath || '';
         cellOverrides = msg.cellOverrides || {};
+        defaultSteps = msg.defaultSteps || [];
         updateSettingsUI();
         renderProjectList();
         renderPresetDropdown();

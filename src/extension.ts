@@ -1,8 +1,58 @@
 import * as vscode from "vscode";
 import * as path from "path";
+import * as fs from "fs";
+import * as os from "os";
 import { SidebarProvider } from "./SidebarProvider";
 import { TerminalGridPanel } from "./TerminalGridPanel";
 import { McpBridge } from "./McpBridge";
+
+/** Build the MCP server entry for config files */
+function mcpServerEntry(extensionPath: string, port: number) {
+  return {
+    command: "node",
+    args: [path.join(extensionPath, "mcp-server.js")],
+    env: { TERMINAL_GRID_PORT: String(port) },
+  };
+}
+
+/** Upsert terminal-grid MCP server into a JSON config file */
+function upsertMcpConfig(filePath: string, extensionPath: string, port: number): void {
+  try {
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    let config: Record<string, unknown> = {};
+    if (fs.existsSync(filePath)) {
+      config = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+    }
+    if (!config.mcpServers || typeof config.mcpServers !== "object") {
+      config.mcpServers = {};
+    }
+    (config.mcpServers as Record<string, unknown>)["terminal-grid"] =
+      mcpServerEntry(extensionPath, port);
+    fs.writeFileSync(filePath, JSON.stringify(config, null, 2), "utf-8");
+  } catch {
+    // Silently fail — don't block extension activation
+  }
+}
+
+/** Register/update Terminal Grid MCP server in Claude CLI + Claude Desktop configs */
+function syncClaudeMcpConfig(extensionPath: string, port: number): void {
+  // Claude CLI — ~/.claude.json
+  upsertMcpConfig(path.join(os.homedir(), ".claude.json"), extensionPath, port);
+  // Claude Desktop — %APPDATA%/Claude/claude_desktop_config.json (Win)
+  //                   ~/Library/Application Support/Claude/claude_desktop_config.json (macOS)
+  //                   ~/.config/Claude/claude_desktop_config.json (Linux)
+  const appData = process.platform === "win32"
+    ? process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming")
+    : process.platform === "darwin"
+      ? path.join(os.homedir(), "Library", "Application Support")
+      : path.join(os.homedir(), ".config");
+  upsertMcpConfig(
+    path.join(appData, "Claude", "claude_desktop_config.json"),
+    extensionPath,
+    port
+  );
+}
 
 let mcpBridge: McpBridge | undefined;
 let mcpStatusItem: vscode.StatusBarItem | undefined;
@@ -20,6 +70,8 @@ export function activate(context: vscode.ExtensionContext): void {
         cellLabels: string[]; zoomPercent: number;
         fontFamily: string; bgColor: string; fgColor: string;
         colorTheme?: string; shellType?: string; defaultCommand?: string;
+        defaultSteps?: {type: string; input?: string; ms?: number}[];
+        cellStepsOverrides?: Record<number, Record<string, unknown>>;
       }>>("presets", []);
       const preset = presets.find((p) => p.name === presetName);
       if (preset) {
@@ -35,6 +87,24 @@ export function activate(context: vscode.ExtensionContext): void {
         context.globalState.update("startupCommands", preset.startupCommands || []);
         context.globalState.update("cellLabels", preset.cellLabels || []);
         context.globalState.update("defaultCommand", preset.defaultCommand || "");
+        // Restore sequential startup steps
+        if (preset.defaultSteps) {
+          context.globalState.update("defaultSteps", preset.defaultSteps);
+        } else if (preset.defaultCommand) {
+          context.globalState.update("defaultSteps", [{ type: "command", input: preset.defaultCommand }]);
+        } else {
+          context.globalState.update("defaultSteps", []);
+        }
+        if (preset.cellStepsOverrides) {
+          const cur = context.globalState.get<Record<number, Record<string, unknown>>>("cellOverrides", {});
+          for (const [k, v] of Object.entries(preset.cellStepsOverrides)) {
+            if (!cur[Number(k)]) cur[Number(k)] = {};
+            if (Array.isArray((v as Record<string, unknown>).startupSteps)) {
+              cur[Number(k)].startupSteps = (v as Record<string, unknown>).startupSteps;
+            }
+          }
+          context.globalState.update("cellOverrides", cur);
+        }
       }
     }
   }
@@ -61,6 +131,8 @@ export function activate(context: vscode.ExtensionContext): void {
         mcpStatusItem.show();
         context.subscriptions.push(mcpStatusItem);
         sidebarProvider.setMcpPort(port);
+        // Auto-register MCP server in Claude CLI + Desktop configs
+        syncClaudeMcpConfig(context.extensionPath, port);
       })
       .catch((err) => {
         vscode.window.showWarningMessage(
@@ -68,6 +140,67 @@ export function activate(context: vscode.ExtensionContext): void {
         );
       });
   }
+
+  // VS Code Copilot MCP registration (VS Code 1.99+)
+  const lm = vscode.lm as Record<string, unknown> | undefined;
+  if (typeof lm?.registerMcpServerDefinitionProvider === "function") {
+    const didChange = new vscode.EventEmitter<void>();
+    let currentPort = apiPort;
+    const register = lm.registerMcpServerDefinitionProvider as (
+      id: string,
+      provider: {
+        onDidChangeMcpServerDefinitions: vscode.Event<void>;
+        provideMcpServerDefinitions: () => Promise<unknown[]>;
+      }
+    ) => vscode.Disposable;
+    context.subscriptions.push(
+      register("terminalGrid", {
+        onDidChangeMcpServerDefinitions: didChange.event,
+        provideMcpServerDefinitions: async () => {
+          if (currentPort <= 0) return [];
+          const McpStdio = (vscode as Record<string, unknown>).McpStdioServerDefinition as
+            new (label: string, command: string, args: string[], env: Record<string, string>, version?: string) => unknown;
+          if (!McpStdio) return [];
+          return [
+            new McpStdio(
+              "Terminal Grid",
+              "node",
+              [path.join(context.extensionPath, "mcp-server.js")],
+              { TERMINAL_GRID_PORT: String(currentPort) },
+              context.extension.packageJSON.version
+            ),
+          ];
+        },
+      }),
+      didChange
+    );
+    // Expose port updater so config change listener can fire didChange
+    context.subscriptions.push(
+      vscode.workspace.onDidChangeConfiguration((e) => {
+        if (e.affectsConfiguration("terminalGrid.apiPort")) {
+          currentPort = vscode.workspace
+            .getConfiguration("terminalGrid")
+            .get<number>("apiPort", 7890);
+          didChange.fire();
+        }
+      })
+    );
+  }
+
+  // Re-sync Claude configs when apiPort changes
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration("terminalGrid.apiPort")) {
+        const newPort = vscode.workspace
+          .getConfiguration("terminalGrid")
+          .get<number>("apiPort", 7890);
+        if (newPort > 0) {
+          syncClaudeMcpConfig(context.extensionPath, newPort);
+        }
+      }
+    })
+  );
+
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(
       SidebarProvider.viewType,
@@ -223,7 +356,7 @@ export function activate(context: vscode.ExtensionContext): void {
         vscode.window.showWarningMessage(vscode.l10n.t("Terminal Grid API: {0} test(s) failed. See output.", failed));
       }
     }),
-    // Copy MCP configuration to clipboard
+// Copy MCP configuration to clipboard
     vscode.commands.registerCommand("terminalGrid.copyMcpConfig", () => {
       const port = mcpBridge?.getPort() ?? 7890;
       const mcpServerPath = path.join(

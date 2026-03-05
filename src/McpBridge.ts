@@ -105,7 +105,10 @@ export class McpBridge {
     }
     const cellId = typeof body.cellId === "number" ? body.cellId : -1;
     const text = typeof body.text === "string" ? body.text : "";
-    const result = panel.sendToCell(cellId, text);
+    const submit = body.submit === true;
+    const result = submit
+      ? panel.sendInputToCell(cellId, text)
+      : panel.sendToCell(cellId, text);
     res.writeHead(200);
     res.end(JSON.stringify({ success: result }));
   }
@@ -138,9 +141,14 @@ export class McpBridge {
       return;
     }
     const text = typeof body.text === "string" ? body.text : "";
+    const submit = body.submit === true;
     const count = panel.getCellCount();
-    for (let i = 0; i < count; i++) {
-      panel.sendToCell(i, text);
+    if (submit) {
+      panel.broadcastInput(text);
+    } else {
+      for (let i = 0; i < count; i++) {
+        panel.sendToCell(i, text);
+      }
     }
     res.writeHead(200);
     res.end(JSON.stringify({ success: true, cellCount: count }));

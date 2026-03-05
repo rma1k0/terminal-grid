@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import * as os from "os";
 import * as fs from "fs";
 import * as path from "path";
 import { BUILTIN_THEMES, resolveThemeColors } from "./themes";
@@ -13,6 +14,70 @@ interface PtyLike {
 interface TerminalInstance {
   id: number;
   pty: PtyLike;
+}
+
+type StartupStep =
+  | { type: "command"; input: string }
+  | { type: "timeout"; ms: number };
+
+function stepsDelay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+const DEFAULT_STEP_DELAY = 3000;
+const LLM_PROMPT_TIMEOUT = 15000; // Max wait for LLM prompt (15s)
+const LLM_PROMPT_POLL = 200;      // Poll interval (ms)
+/** Patterns that indicate an LLM CLI is ready for input */
+const LLM_READY_PATTERNS = [
+  /[❯>✻⏵›]\s*$/m,         // Claude, Gemini, Copilot, Codex prompt
+  /aider>\s*$/m,           // Aider prompt
+];
+
+/** Detect Windows build number. Win11 = 22000+, Win10 = below. */
+const WIN_BUILD = (() => {
+  if (process.platform !== "win32") return 0;
+  const parts = os.release().split(".");
+  return parseInt(parts[2] || "0", 10);
+})();
+
+/** LLM Enter: CSI U on Win11+ / non-Windows, plain CR on Win10 */
+const LLM_ENTER = WIN_BUILD > 0 && WIN_BUILD < 22000 ? "\r" : "\x1b[13u";
+
+/** Known LLM CLI commands — after these, subsequent steps use \n (LF) */
+const LLM_CLI_PATTERNS = [
+  "claude", "codex", "gemini", "copilot", "aider",
+  "claude --dangerously-skip-permissions",
+  "codex -s danger-full-access -a never",
+];
+
+function isLlmCommand(input: string): boolean {
+  const trimmed = input.trim();
+  return LLM_CLI_PATTERNS.some((p) => trimmed === p || trimmed.startsWith(p + " "));
+}
+
+/** Determine line ending based on shell type (PTY always uses \r for Enter) */
+function getLineEnding(shellType: string): string {
+  const lower = shellType.toLowerCase();
+  if (lower.includes("powershell") || lower.includes("pwsh") || lower.includes("cmd")) {
+    return "\r\n";
+  }
+  return "\r";
+}
+
+function resolveStartupSteps(
+  cellOverrides: Record<number, { startupSteps?: StartupStep[]; startupCommand?: string; [k: string]: unknown }>,
+  expandedCmds: string[],
+  defaultSteps: StartupStep[],
+  defaultCommand: string,
+  cellId: number,
+): StartupStep[] {
+  const ov = cellOverrides[cellId];
+  if (ov?.startupSteps && ov.startupSteps.length > 0) return ov.startupSteps;
+  if (ov?.startupCommand) return [{ type: "command", input: ov.startupCommand }];
+  if (expandedCmds[cellId]) return [{ type: "command", input: expandedCmds[cellId] }];
+  if (defaultSteps.length > 0) return defaultSteps;
+  if (defaultCommand) return [{ type: "command", input: defaultCommand }];
+  return [];
 }
 
 interface CustomFont {
@@ -36,18 +101,31 @@ const FONT_FORMATS: Record<string, string> = {
 export class TerminalGridPanel {
   public static currentPanel: TerminalGridPanel | undefined;
   private static _nodePty: typeof import("node-pty") | null | undefined;
+  private static _log: vscode.OutputChannel | undefined;
   private readonly _panel: vscode.WebviewPanel;
   private readonly _context: vscode.ExtensionContext;
   private _terminals: TerminalInstance[] = [];
   private _outputBuffers: string[] = [];
   private _csiUMode: boolean[] = [];            // Kitty keyboard protocol active per cell
+  private _insideLlm: boolean[] = [];            // Cell is running an LLM CLI process
+  private _cellShellType: string[] = [];          // Shell type per cell for EOL detection
   private static readonly OUTPUT_BUFFER_SIZE = 50000;
   private static readonly CSI_U_ENABLE = /\x1b\[>[0-9]+u/;
   private static readonly CSI_U_DISABLE = /\x1b\[<[0-9]*u/;
   private _disposed = false;
+  private _stepGeneration: Record<number, number> = {};
   private _rows: number;
   private _cols: number;
   private _configListener: vscode.Disposable | undefined;
+
+
+  private static _getLog(): vscode.OutputChannel {
+    if (!TerminalGridPanel._log) {
+      TerminalGridPanel._log = vscode.window.createOutputChannel("Terminal Grid");
+    }
+    return TerminalGridPanel._log;
+  }
+
 
   private static _getNodePty(): typeof import("node-pty") | null {
     if (TerminalGridPanel._nodePty === undefined) {
@@ -199,19 +277,31 @@ export class TerminalGridPanel {
     vscode.commands.executeCommand("terminalGrid._refreshSidebar");
   }
 
-  /** Get the correct Enter sequence for a terminal cell */
+  /** Get the correct Enter sequence for a terminal cell.
+   *  LLM TUI apps: CSI U on Win11+, plain CR on Win10. */
   private _enterSeq(id: number): string {
-    return this._csiUMode[id] ? "\x1b[13u" : "\r";
+    if (this._csiUMode[id] || this._insideLlm[id]) return LLM_ENTER;
+    return getLineEnding(this._cellShellType[id] || "");
   }
 
   /** Broadcast text to all terminals */
   public broadcastInput(text: string): void {
-    const hasNewline = /\r?\n/.test(text);
-    const data = hasNewline
-      ? "\x1b[200~" + text + "\x1b[201~"
-      : text;
     for (const t of this._terminals) {
-      t.pty.write(data + this._enterSeq(t.id));
+      if (this._insideLlm[t.id]) {
+        // LLM TUI: type char-by-char then send Enter
+        this._typeToCell(t.id, text).then(() => stepsDelay(50)).then(() => {
+          t.pty.write(this._enterSeq(t.id));
+        });
+      } else {
+        const hasNewline = /\r?\n/.test(text);
+        const data = hasNewline
+          ? "\x1b[200~" + text + "\x1b[201~"
+          : text;
+        t.pty.write(data + this._enterSeq(t.id));
+      }
+      // Track LLM context
+      if (isLlmCommand(text)) this._insideLlm[t.id] = true;
+      if (text.trim() === "exit") this._insideLlm[t.id] = false;
     }
   }
 
@@ -219,29 +309,53 @@ export class TerminalGridPanel {
   public sendToCell(cellId: number, text: string): boolean {
     const t = this._terminals[cellId];
     if (!t) return false;
-    t.pty.write(text);
+    this._chunkedWrite(t.pty, text);
     return true;
   }
 
-  /** Send text + Enter to a specific terminal cell (auto-detects CSI u mode) */
+  /** Send text + Enter to a specific terminal cell (auto-detects LLM / CSI u mode) */
   public sendInputToCell(cellId: number, text: string): boolean {
     const t = this._terminals[cellId];
     if (!t) return false;
-    const hasNewline = /\r?\n/.test(text);
-    const data = hasNewline
-      ? "\x1b[200~" + text + "\x1b[201~"
-      : text;
-    t.pty.write(data + this._enterSeq(cellId));
+    if (this._insideLlm[cellId]) {
+      // LLM TUI: type char-by-char then send Enter (same as startup steps)
+      this._typeToCell(cellId, text).then(() => stepsDelay(50)).then(() => {
+        t.pty.write(this._enterSeq(cellId));
+      });
+    } else {
+      const hasNewline = /\r?\n/.test(text);
+      const data = hasNewline
+        ? "\x1b[200~" + text + "\x1b[201~"
+        : text;
+      t.pty.write(data + this._enterSeq(cellId));
+    }
+    // Track LLM context so subsequent calls use the correct Enter
+    if (isLlmCommand(text)) this._insideLlm[cellId] = true;
+    if (text.trim() === "exit") this._insideLlm[cellId] = false;
     return true;
   }
 
   /** Read recent output from a specific terminal cell */
+  /** Strip ANSI escape sequences from raw PTY output */
+  private static _stripAnsi(s: string): string {
+    return s
+      .replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, "")   // CSI sequences (colors, cursor, erase)
+      .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, "") // OSC sequences
+      .replace(/\x1b[()][0-9A-Z]/g, "")           // Character set selection
+      .replace(/\x1b[78DEHM]/g, "")               // Single-char escapes
+      .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, "") // Control chars (keep \t \n \r)
+      .replace(/\r\n/g, "\n")                      // Normalize line endings
+      .replace(/\r/g, "\n")
+      .replace(/\n{3,}/g, "\n\n");                 // Collapse excessive blank lines
+  }
+
   public readCell(cellId: number, lines?: number): string | null {
     const buf = this._outputBuffers[cellId];
     if (buf === undefined) return null;
-    if (lines === undefined) return buf;
+    const clean = TerminalGridPanel._stripAnsi(buf);
+    if (lines === undefined) return clean;
     if (lines <= 0) return "";
-    const allLines = buf.split("\n");
+    const allLines = clean.split("\n");
     return allLines.slice(-lines).join("\n");
   }
 
@@ -346,9 +460,11 @@ export class TerminalGridPanel {
             }
           }
           break;
-        case "input":
-          this._terminals[msg.id]?.pty.write(msg.data);
+        case "input": {
+          const pty = this._terminals[msg.id]?.pty;
+          if (pty) this._chunkedWrite(pty, msg.data);
           break;
+        }
         case "resize":
           try {
             this._terminals[msg.id]?.pty.resize(msg.cols, msg.rows);
@@ -471,8 +587,7 @@ export class TerminalGridPanel {
       );
     }
 
-    // Resolve per-cell startup commands:
-    // Priority: cellOverrides[i].startupCommand > old startupCommands list > defaultCommand
+    // Resolve per-cell startup commands (backward compat: old startupCommands list)
     const rawCmds = this._context.globalState.get<unknown[]>("startupCommands", []);
     const expandedCmds: string[] = [];
     for (const item of rawCmds) {
@@ -486,37 +601,39 @@ export class TerminalGridPanel {
       }
     }
     const defaultCommand = this._context.globalState.get<string>("defaultCommand", "");
+    const defaultSteps = this._context.globalState.get<StartupStep[]>("defaultSteps", []);
 
     const c = defaultCols || 80;
     const r = defaultRows || 24;
 
     const globalShell = vscode.workspace.getConfiguration("terminalGrid").get<string>("shellType", "");
-    const cellOverrides = this._context.globalState.get<Record<number, { shellType?: string; startupCommand?: string }>>("cellOverrides", {});
+    const cellOverrides = this._context.globalState.get<Record<number, { shellType?: string; startupCommand?: string; startupSteps?: StartupStep[] }>>("cellOverrides", {});
 
     // Spawn + wire handler immediately per cell (handler must be registered
     // before the first PTY output arrives, so spawn and onData stay together)
     for (let i = 0; i < total; i++) {
-      const cellShell = cellOverrides[i]?.shellType || globalShell || undefined;
-      const pty = this._spawnPty(nodePty, c, r, cwd, cellShell);
+      const cellShell = cellOverrides[i]?.shellType || globalShell || "";
+      const pty = this._spawnPty(nodePty, c, r, cwd, cellShell || undefined);
       const id = i;
-      // Per-cell command > old list > default
-      const pendingCmd = cellOverrides[i]?.startupCommand || expandedCmds[i] || defaultCommand || "";
+      const steps = resolveStartupSteps(cellOverrides, expandedCmds, defaultSteps, defaultCommand, i);
+      this._cellShellType[id] = cellShell;
+      this._insideLlm[id] = false;
       this._outputBuffers[id] = "";
       this._csiUMode[id] = false;
       let startupSent = false;
       pty.onData((data: string) => {
         if (!this._disposed) {
           // Track Kitty keyboard protocol mode
-          if (TerminalGridPanel.CSI_U_ENABLE.test(data)) this._csiUMode[id] = true;
-          if (TerminalGridPanel.CSI_U_DISABLE.test(data)) this._csiUMode[id] = false;
+          if (TerminalGridPanel.CSI_U_ENABLE.test(data)) { this._csiUMode[id] = true; }
+          if (TerminalGridPanel.CSI_U_DISABLE.test(data)) { this._csiUMode[id] = false; }
           this._outputBuffers[id] = (this._outputBuffers[id] || "") + data;
           if (this._outputBuffers[id].length > TerminalGridPanel.OUTPUT_BUFFER_SIZE) {
             this._outputBuffers[id] = this._outputBuffers[id].slice(-TerminalGridPanel.OUTPUT_BUFFER_SIZE);
           }
           this._panel.webview.postMessage({ type: "output", id, data });
-          if (!startupSent && pendingCmd) {
+          if (!startupSent && steps.length > 0) {
             startupSent = true;
-            this._terminals[id]?.pty.write(pendingCmd + "\r");
+            this._executeSteps(id, steps, this._cellShellType[id] || "");
           }
         }
       });
@@ -544,12 +661,11 @@ export class TerminalGridPanel {
       ".";
 
     const globalShell = vscode.workspace.getConfiguration("terminalGrid").get<string>("shellType", "");
-    const cellOverrides = this._context.globalState.get<Record<number, { shellType?: string; startupCommand?: string }>>("cellOverrides", {});
-    const cellShell = cellOverrides[id]?.shellType || globalShell || undefined;
-    const pty = this._spawnPty(TerminalGridPanel._getNodePty(), 80, 24, cwd, cellShell);
+    const cellOverrides = this._context.globalState.get<Record<number, { shellType?: string; startupCommand?: string; startupSteps?: StartupStep[] }>>("cellOverrides", {});
+    const cellShell = cellOverrides[id]?.shellType || globalShell || "";
+    const pty = this._spawnPty(TerminalGridPanel._getNodePty(), 80, 24, cwd, cellShell || undefined);
 
-    // Re-apply startup command for this cell
-    // Priority: cellOverrides > old startupCommands list > defaultCommand
+    // Re-apply startup steps for this cell (backward compat: old startupCommands list)
     const rawCmds = this._context.globalState.get<unknown[]>("startupCommands", []);
     const expanded: string[] = [];
     for (const item of rawCmds) {
@@ -563,7 +679,10 @@ export class TerminalGridPanel {
       }
     }
     const defaultCommand = this._context.globalState.get<string>("defaultCommand", "");
-    const pendingCmd = cellOverrides[id]?.startupCommand || expanded[id] || defaultCommand || "";
+    const defaultSteps = this._context.globalState.get<StartupStep[]>("defaultSteps", []);
+    const steps = resolveStartupSteps(cellOverrides, expanded, defaultSteps, defaultCommand, id);
+    this._cellShellType[id] = cellShell;
+    this._insideLlm[id] = false;
     let startupSent = false;
     this._outputBuffers[id] = "";
     this._csiUMode[id] = false;
@@ -571,21 +690,125 @@ export class TerminalGridPanel {
     pty.onData((data: string) => {
       if (!this._disposed) {
         // Track Kitty keyboard protocol mode
-        if (TerminalGridPanel.CSI_U_ENABLE.test(data)) this._csiUMode[id] = true;
-        if (TerminalGridPanel.CSI_U_DISABLE.test(data)) this._csiUMode[id] = false;
+        if (TerminalGridPanel.CSI_U_ENABLE.test(data)) { this._csiUMode[id] = true; }
+        if (TerminalGridPanel.CSI_U_DISABLE.test(data)) { this._csiUMode[id] = false; }
         this._outputBuffers[id] = (this._outputBuffers[id] || "") + data;
         if (this._outputBuffers[id].length > TerminalGridPanel.OUTPUT_BUFFER_SIZE) {
           this._outputBuffers[id] = this._outputBuffers[id].slice(-TerminalGridPanel.OUTPUT_BUFFER_SIZE);
         }
         this._panel.webview.postMessage({ type: "output", id, data });
-        if (!startupSent && pendingCmd) {
+        if (!startupSent && steps.length > 0) {
           startupSent = true;
-          this._terminals[id]?.pty.write(pendingCmd + "\r");
+          this._executeSteps(id, steps, this._cellShellType[id] || "");
         }
       }
     });
 
     this._terminals[id] = { id, pty };
+  }
+
+  /**
+
+  /** Write large text to PTY in chunks to avoid ConPTY buffer overflow */
+  private static readonly CHUNK_SIZE = 65536;
+  private _chunkedWrite(pty: PtyLike, data: string): void {
+    if (data.length <= TerminalGridPanel.CHUNK_SIZE) {
+      pty.write(data);
+      return;
+    }
+    let offset = 0;
+    const writeNext = (): void => {
+      if (offset >= data.length) return;
+      const chunk = data.slice(offset, offset + TerminalGridPanel.CHUNK_SIZE);
+      offset += TerminalGridPanel.CHUNK_SIZE;
+      pty.write(chunk);
+      if (offset < data.length) setTimeout(writeNext, 5);
+    };
+    writeNext();
+  }
+
+  /** Write text to PTY one character at a time (simulates typing) */
+  private async _typeToCell(cellId: number, text: string): Promise<void> {
+    const pty = this._terminals[cellId]?.pty;
+    if (!pty) return;
+    for (const ch of text) {
+      pty.write(ch);
+      await stepsDelay(20);
+    }
+  }
+
+  private static readonly LLM_TYPE_MAX_RETRIES = 5;
+  private static readonly LLM_ECHO_WAIT = 2000;  // ms to wait for echo per attempt
+
+  /** Wait until the LLM CLI shows a prompt (ready for input), or timeout */
+  private async _waitForLlmPrompt(cellId: number): Promise<boolean> {
+    const bufBefore = (this._outputBuffers[cellId] || "").length;
+    const deadline = Date.now() + LLM_PROMPT_TIMEOUT;
+    while (Date.now() < deadline) {
+      await stepsDelay(LLM_PROMPT_POLL);
+      const buf = this._outputBuffers[cellId] || "";
+      const recent = TerminalGridPanel._stripAnsi(buf.slice(bufBefore));
+      if (LLM_READY_PATTERNS.some((p) => p.test(recent))) return true;
+      if (this._disposed) return false;
+    }
+    return false;
+  }
+
+  /** Type text into LLM, verify echo, retry with Ctrl+U clear if echo fails.
+   *  Returns true if echo was confirmed. */
+  private async _typeWithRetry(cellId: number, text: string): Promise<boolean> {
+    const pty = this._terminals[cellId]?.pty;
+    if (!pty) return false;
+    for (let attempt = 0; attempt < TerminalGridPanel.LLM_TYPE_MAX_RETRIES; attempt++) {
+      const bufBefore = (this._outputBuffers[cellId] || "").length;
+      // Type text char-by-char
+      await this._typeToCell(cellId, text);
+      // Poll for echo
+      const echoDeadline = Date.now() + TerminalGridPanel.LLM_ECHO_WAIT;
+      while (Date.now() < echoDeadline) {
+        await stepsDelay(50);
+        const buf = this._outputBuffers[cellId] || "";
+        const recent = TerminalGridPanel._stripAnsi(buf.slice(bufBefore));
+        if (recent.includes(text)) return true; // echo confirmed
+        if (this._disposed) return false;
+      }
+      // Echo not found — delete typed chars with backspaces and retry
+      for (let j = 0; j < text.length; j++) pty.write("\x7f");
+      await stepsDelay(300);
+    }
+    return false; // all retries exhausted
+  }
+
+  private async _executeSteps(cellId: number, steps: StartupStep[], shellType: string): Promise<void> {
+    if (!this._stepGeneration[cellId]) this._stepGeneration[cellId] = 0;
+    const gen = ++this._stepGeneration[cellId];
+    let insideLlm = false;
+    for (let i = 0; i < steps.length; i++) {
+      if (this._disposed || this._stepGeneration[cellId] !== gen) return;
+      const step = steps[i];
+      if (step.type === "timeout") {
+        await stepsDelay(step.ms);
+      } else if (step.type === "command") {
+        if (i > 0) {
+          if (insideLlm) {
+            await this._waitForLlmPrompt(cellId);
+          } else if (steps[i - 1].type === "command") {
+            await stepsDelay(DEFAULT_STEP_DELAY);
+          }
+        }
+        if (this._disposed || this._stepGeneration[cellId] !== gen) return;
+        const eol = insideLlm ? LLM_ENTER : this._enterSeq(cellId);
+        if (insideLlm) {
+          await this._typeWithRetry(cellId, step.input);
+          this._terminals[cellId]?.pty.write(eol);
+        } else {
+          this._terminals[cellId]?.pty.write(step.input + eol);
+        }
+        if (isLlmCommand(step.input)) insideLlm = true;
+        if (step.input.trim() === "exit") insideLlm = false;
+        this._insideLlm[cellId] = insideLlm;
+      }
+    }
   }
 
   public restartCell(id: number): void {

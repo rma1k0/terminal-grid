@@ -23,7 +23,7 @@ const TOOLS = [
   {
     name: "get_grid_info",
     description:
-      "Get information about the current terminal grid including dimensions, cell count, and cell labels. Returns null grid if no grid is open.",
+      "Get information about the current Terminal Grid (a VS Code tmux-like terminal multiplexer). Returns grid dimensions (rows x cols), total cell count, and cell labels. Call this first to discover the grid layout before sending commands. Returns null grid if no grid is open.",
     inputSchema: {
       type: "object",
       properties: {},
@@ -32,18 +32,23 @@ const TOOLS = [
   {
     name: "send_to_cell",
     description:
-      'Send text to a specific terminal cell. The text is written as-is — append "\\r" to execute as a command (press Enter). Cell IDs are 0-based.',
+      "Send text to a specific terminal cell in Terminal Grid. Each cell is an independent terminal (PTY). Always set submit=true when you want to execute a command — this automatically sends the correct Enter key for the environment (shell, PowerShell/PSReadLine, or LLM TUI like claude/codex). Do NOT manually append \\r or \\n. PSReadLine compatibility is handled automatically. Cell IDs are 0-based (use get_grid_info to see available cells).",
     inputSchema: {
       type: "object",
       properties: {
         cellId: {
           type: "number",
-          description: "Cell index (0-based)",
+          description: "Cell index (0-based). Use get_grid_info to see available cells.",
         },
         text: {
           type: "string",
           description:
-            'Text to send to the terminal. Append "\\r" to press Enter and execute.',
+            "Text to send to the terminal. Do not include \\r or \\n — use submit=true instead.",
+        },
+        submit: {
+          type: "boolean",
+          description:
+            "Set to true to execute the text as a command (presses Enter). Automatically detects whether the cell is running a shell or an LLM TUI app and sends the correct Enter key sequence. Default: false.",
         },
       },
       required: ["cellId", "text"],
@@ -52,18 +57,18 @@ const TOOLS = [
   {
     name: "read_cell",
     description:
-      "Read output from a specific terminal cell. Returns the terminal's output buffer. Use the lines parameter to limit to recent lines.",
+      "Read output from a specific terminal cell in Terminal Grid. Returns the terminal's recent output buffer as text. Useful for checking command results, monitoring processes, or reading LLM responses. Use the lines parameter to limit to the most recent N lines.",
     inputSchema: {
       type: "object",
       properties: {
         cellId: {
           type: "number",
-          description: "Cell index (0-based)",
+          description: "Cell index (0-based). Use get_grid_info to see available cells.",
         },
         lines: {
           type: "number",
           description:
-            "Number of recent lines to return. Omit to get full buffer.",
+            "Number of recent lines to return. Omit to get the full buffer (up to 50KB).",
         },
       },
       required: ["cellId"],
@@ -72,14 +77,19 @@ const TOOLS = [
   {
     name: "broadcast",
     description:
-      'Send the same text to ALL terminal cells at once. Append "\\r" to execute as a command.',
+      "Send the same text to ALL terminal cells in Terminal Grid at once. Set submit=true to execute as a command in every cell. Useful for running the same command across multiple terminals simultaneously.",
     inputSchema: {
       type: "object",
       properties: {
         text: {
           type: "string",
           description:
-            'Text to send to all cells. Append "\\r" to press Enter and execute.',
+            "Text to send to all cells. Do not include \\r or \\n — use submit=true instead.",
+        },
+        submit: {
+          type: "boolean",
+          description:
+            "Set to true to execute in all cells (presses Enter). Automatically handles shell and LLM TUI apps. Default: false.",
         },
       },
       required: ["text"],
@@ -173,6 +183,7 @@ async function handleToolCall(name, args) {
         const result = await httpRequest("POST", "/api/send", {
           cellId: args.cellId,
           text: args.text,
+          submit: args.submit || false,
         });
         return {
           content: [{ type: "text", text: JSON.stringify(result) }],
@@ -202,6 +213,7 @@ async function handleToolCall(name, args) {
       case "broadcast": {
         const result = await httpRequest("POST", "/api/broadcast", {
           text: args.text,
+          submit: args.submit || false,
         });
         return {
           content: [{ type: "text", text: JSON.stringify(result) }],
@@ -246,6 +258,7 @@ rl.on("line", async (line) => {
           name: "terminal-grid-mcp",
           version: "1.0.0",
         },
+        instructions: "You have access to Terminal Grid — a VS Code tmux-like terminal multiplexer. Use get_grid_info first to see the grid layout, then send_to_cell/broadcast to run commands (always use submit:true to execute). Use read_cell to check output. These tools work with both shell and LLM TUI apps (claude, codex) automatically.",
       },
     });
   } else if (msg.method === "notifications/initialized") {
