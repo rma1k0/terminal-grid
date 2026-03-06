@@ -28,7 +28,7 @@
 - Removed manual MCP config instructions (auto-registers now)
 - Removed node-pty requirement section (bundled)
 
-## [0.3.5] - 2025
+## [0.3.5] - 2026
 
 ### Added
 - Startup commands UI with sequential steps (command, wait, key)
@@ -38,7 +38,7 @@
 - Key passthrough for special keys in terminal
 - Build automation — VSIX auto-package and install on compile
 
-## [0.3.4] - 2025
+## [0.3.4] - 2026
 
 ### Added
 - 8 built-in color themes
@@ -46,13 +46,13 @@
 - Grid resize (change rows/cols without reopening)
 - Search improvements in sidebar
 
-## [0.3.2] - 2025
+## [0.3.2] - 2026
 
 ### Fixed
 - Marketplace image URLs (use raw GitHub links)
 - Exclude GIF from VSIX package
 
-## [0.3.1] - 2025
+## [0.3.1] - 2026
 
 ### Added
 - MCP server integration — built-in HTTP bridge for LLM orchestration
@@ -65,7 +65,7 @@
 ### Fixed
 - MCP server zombie process prevention (stdin close + health check)
 
-## [0.3.0] - 2025
+## [0.3.0] - 2026
 
 ### Added
 - Per-cell terminal customization (background, foreground, font)
@@ -84,7 +84,7 @@
 - node-pty install banner stuck on "Installing..."
 - Dynamic spacing between collapsed/expanded sections
 
-## [0.2.0] - 2025
+## [0.2.0] - 2026
 
 ### Added
 - Sidebar control panel with glass-morphism UI
@@ -100,7 +100,7 @@
 - Grid panel serialization (restore on VS Code restart)
 - node-pty installation flow with sidebar banner
 
-## [0.1.0] - 2025
+## [0.1.0] - 2026
 
 ### Added
 - Initial release
