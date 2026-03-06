@@ -1,5 +1,57 @@
 # Changelog
 
+## [0.3.7] - 2026
+
+### Added
+- Copy (Plain) context menu — strips terminal wrapping artifacts
+- Codex CLI auto-registration (`~/.codex/config.toml`)
+- Auto-patch stale `.mcp.json` in workspace folders on activation
+- "Why Terminal Grid?" section and AI-focused tagline in README
+
+### Fixed
+- Copy (Plain) clipboard write via `vscode.env.clipboard` (webview sandbox workaround)
+- `getSelectionPosition()` property mismatch (`x`/`y` vs `row`/`col`)
+- Selection lost on context menu click — now cached at right-click time
+
+## [0.3.6] - 2026
+
+### Added
+- MCP auto-registration for Claude Code (`~/.claude.json`) and Claude Desktop
+- VS Code Copilot MCP registration (`vscode.lm.registerMcpServerDefinitionProvider`)
+- LLM TUI detection — auto-sends CSI u key sequences for Enter/Tab/arrows
+- ANSI strip for `read_cell` output
+- Chunked PTY writes to prevent input drops
+- Project Folders sidebar — click to switch, Ctrl+click to open in new window
+
+### Changed
+- README restructured: MCP-first layout with demo GIF
+- Removed manual MCP config instructions (auto-registers now)
+- Removed node-pty requirement section (bundled)
+
+## [0.3.5] - 2025
+
+### Added
+- Startup commands UI with sequential steps (command, wait, key)
+- Per-cell startup step overrides
+- Shell type selection (system default, bash, PowerShell, cmd, zsh)
+- Default command per preset
+- Key passthrough for special keys in terminal
+- Build automation — VSIX auto-package and install on compile
+
+## [0.3.4] - 2025
+
+### Added
+- 8 built-in color themes
+- Broadcast CSI u support for LLM apps
+- Grid resize (change rows/cols without reopening)
+- Search improvements in sidebar
+
+## [0.3.2] - 2025
+
+### Fixed
+- Marketplace image URLs (use raw GitHub links)
+- Exclude GIF from VSIX package
+
 ## [0.3.1] - 2025
 
 ### Added
