@@ -6,15 +6,26 @@
   <img src="https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/icon.png" width="128" alt="Terminal Grid">
 </p>
 
-> Ein tmux-artiges Terminal-Raster für VS Code — teilen, zusammenführen, übertragen und KI Ihre Terminals über MCP steuern lassen.
+> Führen Sie Claude Code, Codex und Ihren Dev-Server nebeneinander aus — in einem einzigen VS Code Tab.
+
+![MCP Demo](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-mcp.gif)
+
+<p align="center"><em>Keine Konfiguration. Sagen Sie Ihrer KI einfach, was sie ausführen soll.</em></p>
+
+## Warum Terminal Grid?
+
+Das integrierte Terminal von VS Code kann Panels teilen, aber das hier nicht:
+
+- **KI steuert Ihre Terminals** — Claude Code oder Codex führen Befehle in jeder Zelle aus und lesen die Ausgabe via MCP
+- **Ein Befehl, mehrere Terminals** — „Starte den Server in Zelle 2, Tests in Zelle 3 und überwache Logs in Zelle 4"
+- **4×5 Raster-Layout** — 20 Terminals in einem Tab, Zellgrenzen ziehen zum Resize wie in Excel
+- **Zusammenführen, Broadcast, Vorlagen** — Zellen kombinieren, an alle senden, Konfigurationen pro Projekt speichern
 
 ![Terminal Grid Screenshot](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/screenshot.png)
 
 ## MCP-Integration — KI-gesteuerte Terminal-Kontrolle
 
-Terminal Grid enthält einen integrierten [MCP (Model Context Protocol)](https://modelcontextprotocol.io/)-Server. KI-Agenten wie Claude Code oder Codex können Ihr Raster sehen, Befehle in jeder Zelle ausführen und die Ausgabe lesen — alles in natürlicher Sprache.
-
-![MCP Demo](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-mcp.gif)
+Terminal Grid enthält einen integrierten [MCP (Model Context Protocol)](https://modelcontextprotocol.io/)-Server. KI-Agenten können Ihr Raster sehen, Befehle in jeder Zelle ausführen und die Ausgabe lesen — alles in natürlicher Sprache.
 
 **Ein Prompt, drei Terminals gleichzeitig:**
 
@@ -71,6 +82,7 @@ Befehle an alle Terminals oder ausgewählte Zellen gleichzeitig senden.
 
 ### Weitere Funktionen
 
+- **Codex CLI-Unterstützung** — Automatische Registrierung in `~/.codex/config.toml` bei Aktivierung
 - **Zell-Labels** — Jedes Terminal benennen
 - **Kontextmenü** — Rechtsklick zum Einfügen, Löschen, Neustarten, Beenden oder Umbenennen
 - **Themes** — 8 integrierte Farbthemen

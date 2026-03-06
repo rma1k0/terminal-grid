@@ -6,15 +6,26 @@
   <img src="https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/icon.png" width="128" alt="Terminal Grid">
 </p>
 
-> Une grille de terminaux style tmux pour VS Code — divisez, fusionnez, diffusez et laissez l'IA contrôler vos terminaux via MCP.
+> Exécutez Claude Code, Codex et votre serveur de développement côte à côte — dans un seul onglet VS Code.
+
+![MCP Demo](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-mcp.gif)
+
+<p align="center"><em>Zéro configuration. Dites simplement à votre IA quoi exécuter.</em></p>
+
+## Pourquoi Terminal Grid ?
+
+Le terminal intégré de VS Code permet de diviser les panneaux, mais il ne peut pas faire ceci :
+
+- **L'IA contrôle vos terminaux** — Claude Code ou Codex exécutent des commandes dans n'importe quelle cellule et lisent la sortie via MCP
+- **Une commande, plusieurs terminaux** — « Lance le serveur dans la cellule 2, les tests dans la cellule 3 et surveille les logs dans la cellule 4 »
+- **Grille jusqu'à 4×5** — 20 terminaux dans un onglet, glissez les bordures pour redimensionner comme dans Excel
+- **Fusion, diffusion, préréglages** — combinez des cellules, envoyez à toutes en une fois, sauvegardez les configs par projet
 
 ![Terminal Grid Screenshot](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/screenshot.png)
 
 ## Intégration MCP — Contrôle de Terminal par IA
 
-Terminal Grid inclut un serveur [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) intégré. Les agents IA comme Claude Code ou Codex peuvent voir votre grille, exécuter des commandes dans n'importe quelle cellule et lire la sortie — le tout en langage naturel.
-
-![MCP Demo](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-mcp.gif)
+Terminal Grid inclut un serveur [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) intégré. Les agents IA peuvent voir votre grille, exécuter des commandes dans n'importe quelle cellule et lire la sortie — le tout en langage naturel.
 
 **Un prompt, trois terminaux à la fois :**
 
@@ -71,6 +82,7 @@ Envoyez des commandes à tous les terminaux ou aux cellules sélectionnées.
 
 ### Autres Fonctionnalités
 
+- **Support Codex CLI** — Auto-enregistré dans `~/.codex/config.toml` à l'activation
 - **Labels de Cellule** — Nommez chaque terminal
 - **Menu Contextuel** — Clic droit pour coller, effacer, redémarrer, terminer ou renommer
 - **Thèmes** — 8 thèmes de couleurs intégrés

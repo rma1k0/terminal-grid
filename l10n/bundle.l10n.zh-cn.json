@@ -84,5 +84,6 @@
   "Command": "命令",
   "Startup command…": "启动命令…",
   "Set shell type and startup command per cell. Use All tab for global defaults, or individual tabs for per-cell overrides.": "按单元格设置 Shell 类型和启动命令。全部标签为全局默认，单独标签为单元格覆盖。",
-  "Apply": "应用"
+  "Apply": "应用",
+  "Copy (Plain)": "复制（纯文本）"
 }

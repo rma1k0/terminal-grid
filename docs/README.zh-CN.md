@@ -6,15 +6,26 @@
   <img src="https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/icon.png" width="128" alt="Terminal Grid">
 </p>
 
-> VS Code 的 tmux 风格终端网格 — 拆分、合并、广播，并通过 MCP 让 AI 控制您的终端。
+> 在一个 VS Code 标签页中并排运行 Claude Code、Codex 和开发服务器。
+
+![MCP Demo](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-mcp.gif)
+
+<p align="center"><em>零配置，直接告诉 AI 该做什么。</em></p>
+
+## 为什么选择 Terminal Grid？
+
+VS Code 内置终端可以拆分面板，但做不到这些：
+
+- **AI 控制终端** — Claude Code 或 Codex 通过 MCP 在任意单元格执行命令并读取输出
+- **一句话，多个终端** — "在单元格 2 启动服务器，单元格 3 跑测试，单元格 4 监控日志"
+- **4×5 网格布局** — 一个标签页 20 个终端，拖动边框像 Excel 一样调整大小
+- **合并、广播、预设** — 合并单元格、全部同时发送、按项目保存配置
 
 ![Terminal Grid Screenshot](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/screenshot.png)
 
 ## MCP 集成 — AI 驱动的终端控制
 
-Terminal Grid 内置 [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) 服务器。Claude Code 或 Codex 等 AI 代理可以查看网格、在任意单元格中运行命令并读取输出 — 全部通过自然语言完成。
-
-![MCP Demo](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-mcp.gif)
+Terminal Grid 内置 [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) 服务器。AI 代理可以查看网格、在任意单元格中运行命令并读取输出 — 全部通过自然语言完成。
 
 **一条指令，三个终端同时执行：**
 
@@ -71,6 +82,7 @@ AI 调用 `get_grid_info` 获取布局，然后对每个目标调用 `send_to_ce
 
 ### 更多功能
 
+- **Codex CLI 支持** — 激活时自动注册到 `~/.codex/config.toml`
 - **单元格标签** — 为每个终端命名
 - **右键菜单** — 粘贴、清除、重启、终止或重命名
 - **主题** — 8 种内置颜色主题

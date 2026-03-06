@@ -286,6 +286,7 @@ for (let i = 0; i < total; i++) {
 // ── Context menu ──
 const ctxMenu = document.getElementById("ctxMenu")!;
 let ctxTargetId = -1;
+let ctxSelectionPosition: { start: { x: number; y: number }; end: { x: number; y: number } } | undefined;
 
 for (let i = 0; i < cells.length; i++) {
   if (!cells[i]) continue;
@@ -293,6 +294,7 @@ for (let i = 0; i < cells.length; i++) {
     e.preventDefault();
     e.stopPropagation();
     ctxTargetId = i;
+    ctxSelectionPosition = cells[i]?.terminal.getSelectionPosition() ?? undefined;
     ctxMenu.style.left = e.clientX + "px";
     ctxMenu.style.top = e.clientY + "px";
     ctxMenu.classList.add("show");
@@ -316,6 +318,34 @@ ctxMenu.addEventListener("click", (e: Event) => {
         navigator.clipboard.writeText(sel).then(() => {
           cells[tid]?.terminal.focus();
         }).catch(() => {});
+      }
+      break;
+    }
+    case "copyPlain": {
+      const cell = cells[ctxTargetId];
+      if (!cell || !ctxSelectionPosition) break;
+      const buf = cell.terminal.buffer.active;
+      const startY = ctxSelectionPosition.start.y - 1;
+      const endY = ctxSelectionPosition.end.y - 1;
+      const lines: string[] = [];
+      let current = "";
+      for (let y = startY; y <= endY; y++) {
+        const line = buf.getLine(y);
+        if (!line) continue;
+        const text = line.translateToString(true);
+        if (line.isWrapped) {
+          current += text;
+        } else {
+          if (current) lines.push(current);
+          current = text;
+        }
+      }
+      if (current) lines.push(current);
+      const plain = lines.join("\n");
+      if (plain) {
+        navigator.clipboard.writeText(plain).catch(() => {
+          vscode.postMessage({ type: "clipboardWrite", text: plain });
+        });
       }
       break;
     }

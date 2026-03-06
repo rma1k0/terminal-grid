@@ -6,15 +6,26 @@
   <img src="https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/icon.png" width="128" alt="Terminal Grid">
 </p>
 
-> A tmux-like terminal grid for VS Code — split, merge, broadcast, and let AI control your terminals via MCP.
+> Run Claude Code, Codex, and your dev server side by side — in a single VS Code tab.
+
+![MCP Demo](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-mcp.gif)
+
+<p align="center"><em>Zero config. Just tell your AI what to run.</em></p>
+
+## Why Terminal Grid?
+
+VS Code's built-in terminal lets you split panes, but it can't do this:
+
+- **AI agents control your terminals** — Claude Code or Codex can run commands in any cell and read the output via MCP
+- **One prompt, multiple terminals** — "Run the server in cell 2, tests in cell 3, and watch logs in cell 4"
+- **Grid layout up to 4×5** — 20 terminals in one tab, drag borders to resize like Excel
+- **Merge, broadcast, preset** — combine cells, send to all at once, save per-project configs
 
 ![Terminal Grid Screenshot](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/screenshot.png)
 
 ## MCP Integration — AI-Powered Terminal Control
 
-Terminal Grid includes a built-in [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server. AI agents like Claude Code or Codex can see your grid, run commands in any cell, and read the output — all through natural language.
-
-![MCP Demo](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-mcp.gif)
+Terminal Grid includes a built-in [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server. AI agents can see your grid, run commands in any cell, and read the output — all through natural language.
 
 **One prompt, three terminals at once:**
 
@@ -24,7 +35,7 @@ The AI calls `get_grid_info` to discover the layout, then `send_to_cell` for eac
 
 ### Setup
 
-No configuration needed — the MCP server auto-registers when the extension activates. Just install Terminal Grid and your MCP client (Claude Code, etc.) will discover it automatically.
+No configuration needed — the MCP server auto-registers when the extension activates. Just install Terminal Grid and your MCP client (Claude Code, Codex, etc.) will discover it automatically.
 
 ### MCP Tools
 
@@ -71,6 +82,7 @@ Send commands to all terminals or selected cells at once.
 
 ### And More
 
+- **Codex CLI Support** — Auto-registers in `~/.codex/config.toml` on activation
 - **Cell Labels** — Name each terminal for easy identification
 - **Context Menu** — Right-click to paste, clear, restart, kill, or rename
 - **Themes** — 8 built-in color themes

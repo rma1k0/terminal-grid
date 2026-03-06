@@ -84,5 +84,6 @@
   "Command": "명령",
   "Startup command…": "시작 명령…",
   "Set shell type and startup command per cell. Use All tab for global defaults, or individual tabs for per-cell overrides.": "셀별 쉘 종류 및 시작 명령을 설정합니다. 전체 탭은 기본값, 개별 탭은 셀별 오버라이드입니다.",
-  "Apply": "적용"
+  "Apply": "적용",
+  "Copy (Plain)": "복사 (서식 제거)"
 }

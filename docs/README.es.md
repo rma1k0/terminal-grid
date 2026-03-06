@@ -6,15 +6,26 @@
   <img src="https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/icon.png" width="128" alt="Terminal Grid">
 </p>
 
-> Un grid de terminales estilo tmux para VS Code — divide, fusiona, transmite y deja que la IA controle tus terminales vía MCP.
+> Ejecuta Claude Code, Codex y tu servidor de desarrollo lado a lado — en una sola pestaña de VS Code.
+
+![MCP Demo](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-mcp.gif)
+
+<p align="center"><em>Sin configuración. Solo dile a tu IA qué ejecutar.</em></p>
+
+## ¿Por qué Terminal Grid?
+
+El terminal integrado de VS Code divide paneles, pero no puede hacer esto:
+
+- **La IA controla tus terminales** — Claude Code o Codex ejecutan comandos en cualquier celda y leen la salida vía MCP
+- **Un comando, múltiples terminales** — "Inicia el servidor en la celda 2, tests en la celda 3 y monitorea logs en la celda 4"
+- **Layout de cuadrícula 4×5** — 20 terminales en una pestaña, arrastra bordes para redimensionar como en Excel
+- **Fusionar, transmitir, preset** — combina celdas, envía a todas a la vez, guarda configuraciones por proyecto
 
 ![Terminal Grid Screenshot](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/screenshot.png)
 
 ## Integración MCP — Control de Terminal por IA
 
-Terminal Grid incluye un servidor [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) integrado. Agentes de IA como Claude Code o Codex pueden ver tu grid, ejecutar comandos en cualquier celda y leer la salida — todo mediante lenguaje natural.
-
-![MCP Demo](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-mcp.gif)
+Terminal Grid incluye un servidor [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) integrado. Agentes de IA pueden ver tu grid, ejecutar comandos en cualquier celda y leer la salida — todo mediante lenguaje natural.
 
 **Un prompt, tres terminales a la vez:**
 
@@ -71,6 +82,7 @@ Envía comandos a todos los terminales o celdas seleccionadas a la vez.
 
 ### Más Funciones
 
+- **Soporte Codex CLI** — Se auto-registra en `~/.codex/config.toml` al activarse
 - **Etiquetas de Celda** — Nombra cada terminal
 - **Menú Contextual** — Clic derecho para pegar, limpiar, reiniciar, terminar o renombrar
 - **Temas** — 8 temas de colores integrados

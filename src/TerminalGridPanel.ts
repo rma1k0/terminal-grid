@@ -481,6 +481,9 @@ export class TerminalGridPanel {
           if (pty) this._chunkedWrite(pty, msg.data);
           break;
         }
+        case "clipboardWrite":
+          vscode.env.clipboard.writeText(msg.text);
+          break;
         case "resize":
           try {
             this._terminals[msg.id]?.pty.resize(msg.cols, msg.rows);
@@ -1013,6 +1016,7 @@ export class TerminalGridPanel {
   <div id="grid"></div>
   <div class="ctx-menu" id="ctxMenu">
     <div class="ctx-menu-item" data-action="copy">${vscode.l10n.t("Copy")}</div>
+    <div class="ctx-menu-item" data-action="copyPlain">${vscode.l10n.t("Copy (Plain)")}</div>
     <div class="ctx-menu-item" data-action="paste">${vscode.l10n.t("Paste")}</div>
     <div class="ctx-menu-sep"></div>
     <div class="ctx-menu-item" data-action="clear">${vscode.l10n.t("Clear")}</div>

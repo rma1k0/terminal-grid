@@ -84,5 +84,6 @@
   "Command": "コマンド",
   "Startup command…": "起動コマンド…",
   "Set shell type and startup command per cell. Use All tab for global defaults, or individual tabs for per-cell overrides.": "セルごとにシェルと起動コマンドを設定します。全体タブはデフォルト、個別タブはセルごとのオーバーライドです。",
-  "Apply": "適用"
+  "Apply": "適用",
+  "Copy (Plain)": "コピー（プレーン）"
 }

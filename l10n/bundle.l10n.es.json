@@ -84,5 +84,6 @@
   "Command": "Comando",
   "Startup command…": "Comando de inicio…",
   "Set shell type and startup command per cell. Use All tab for global defaults, or individual tabs for per-cell overrides.": "Establece el tipo de shell y el comando de inicio por celda. Usa la pestaña Todos para valores globales o pestañas individuales para sobreescrituras por celda.",
-  "Apply": "Aplicar"
+  "Apply": "Aplicar",
+  "Copy (Plain)": "Copiar (Texto plano)"
 }

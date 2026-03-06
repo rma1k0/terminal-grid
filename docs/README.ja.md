@@ -6,15 +6,26 @@
   <img src="https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/icon.png" width="128" alt="Terminal Grid">
 </p>
 
-> VS Code用tmuxスタイルのターミナルグリッド — 分割、結合、ブロードキャスト、そしてMCPによるAIターミナル制御。
+> Claude Code、Codex、開発サーバーを並べて実行 — VS Codeのタブ1つで。
+
+![MCP Demo](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-mcp.gif)
+
+<p align="center"><em>設定不要。AIに指示するだけ。</em></p>
+
+## なぜTerminal Grid？
+
+VS Code標準ターミナルもペイン分割はできますが、これはできません：
+
+- **AIがターミナルを制御** — Claude CodeやCodexがMCP経由でセルにコマンド実行・出力読み取り
+- **一言で複数ターミナル** — 「セル2でサーバー起動、セル3でテスト、セル4でログ監視して」
+- **4×5グリッドレイアウト** — 1タブに20ターミナル、セル境界ドラッグでリサイズ
+- **結合・ブロードキャスト・プリセット** — セル統合、一斉送信、プロジェクト別設定保存
 
 ![Terminal Grid Screenshot](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/screenshot.png)
 
 ## MCP統合 — AIによるターミナル制御
 
-Terminal Gridには[MCP（Model Context Protocol）](https://modelcontextprotocol.io/)サーバーが組み込まれています。Claude CodeやCodexなどのAIエージェントがグリッドを確認し、任意のセルでコマンドを実行し、出力を読み取ることができます — すべて自然言語で。
-
-![MCP Demo](https://raw.githubusercontent.com/koenma-studio/terminal-grid/main/images/demo-mcp.gif)
+Terminal Gridには[MCP（Model Context Protocol）](https://modelcontextprotocol.io/)サーバーが組み込まれています。AIエージェントがグリッドを確認し、任意のセルでコマンドを実行し、出力を読み取ることができます — すべて自然言語で。
 
 **1つのプロンプトで3つのターミナルを同時に：**
 
@@ -71,6 +82,7 @@ LLM CLIツール（Claude Code、Codexなど）をグリッドセル内で直接
 
 ### その他の機能
 
+- **Codex CLI対応** — アクティベーション時に `~/.codex/config.toml` へ自動登録
 - **セルラベル** — 各ターミナルに名前を付ける
 - **コンテキストメニュー** — 右クリックで貼り付け、クリア、再起動、終了、名前変更
 - **テーマ** — 8種類の組み込みカラーテーマ
