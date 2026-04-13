@@ -180,7 +180,9 @@
     "compile": "tsc -p ./ && node scripts/build.js",
     "compile:ext": "tsc -p ./",
     "compile:webview": "node scripts/build.js",
-    "watch": "tsc -watch -p ./"
+    "watch": "tsc -watch -p ./",
+    "rebuild:electron": "node scripts/rebuild-electron.js",
+    "package:vsix": "npm run compile && npx @vscode/vsce package"
   },
   "devDependencies": {
     "@types/node": "^25.3.2",

@@ -16,6 +16,45 @@ function hasNodePty(): boolean {
   try { require("node-pty"); return true; } catch { return false; }
 }
 
+function npmExecutable(): string {
+  return process.platform === "win32" ? "npm.cmd" : "npm";
+}
+
+function getNodePtyPackageSpec(extensionPath: string): string {
+  try {
+    const pkg = JSON.parse(
+      fs.readFileSync(path.join(extensionPath, "package.json"), "utf-8")
+    ) as { dependencies?: Record<string, string> };
+    const version = pkg.dependencies?.["node-pty"];
+    return version ? `node-pty@${version}` : "node-pty";
+  } catch {
+    return "node-pty";
+  }
+}
+
+function runCommand(command: string, args: string[], cwd: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = cp.spawn(command, args, { cwd, env: process.env });
+    let output = "";
+
+    child.stdout?.on("data", (chunk: Buffer | string) => {
+      output += chunk.toString();
+    });
+    child.stderr?.on("data", (chunk: Buffer | string) => {
+      output += chunk.toString();
+    });
+
+    child.on("error", reject);
+    child.on("close", (code: number | null) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      reject(new Error(output.trim() || `${command} exited with code ${code ?? "unknown"}`));
+    });
+  });
+}
+
 export class SidebarProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = "terminalGrid.sidebarView";
   private _view?: vscode.WebviewView;
@@ -472,23 +511,35 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         // ── node-pty install ──
         case "installNodePty": {
           try {
+            const electronVersion = process.versions.electron;
+            if (!electronVersion) {
+              throw new Error(vscode.l10n.t("Unable to detect the editor Electron version."));
+            }
+            const packageSpec = getNodePtyPackageSpec(this._context.extensionPath);
+            const npm = npmExecutable();
             await vscode.window.withProgress(
-              { location: vscode.ProgressLocation.Notification, title: vscode.l10n.t("Installing node-pty…"), cancellable: false },
-              () => new Promise<void>((resolve, reject) => {
-                cp.exec("npm install node-pty", { cwd: this._context.extensionPath }, (err) => {
-                  if (err) {
-                    reject(err);
-                  } else {
-                    resolve();
-                  }
-                });
-              })
+              { location: vscode.ProgressLocation.Notification, title: vscode.l10n.t("Installing node-pty for Electron {0}…", electronVersion), cancellable: false },
+              async () => {
+                await runCommand(npm, ["install", "--no-save", packageSpec], this._context.extensionPath);
+                await runCommand(
+                  npm,
+                  [
+                    "rebuild",
+                    "node-pty",
+                    "--runtime=electron",
+                    `--target=${electronVersion}`,
+                    "--dist-url=https://electronjs.org/headers",
+                    "--build-from-source",
+                  ],
+                  this._context.extensionPath
+                );
+              }
             );
             // Notify sidebar of success
             this._view?.webview.postMessage({ type: "ptyInstallResult", success: true });
             const reloadLabel = vscode.l10n.t("Reload Window");
             const ans = await vscode.window.showInformationMessage(
-              vscode.l10n.t("node-pty installed successfully. Reload window to activate."),
+              vscode.l10n.t("node-pty rebuilt for Electron successfully. Reload window to activate."),
               reloadLabel
             );
             if (ans === reloadLabel) {
